@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSE チャット（完成版）</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    #messages {
+      list-style: none;
+      min-height: 200px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    #messages li {
+      padding: 0.5rem;
+      border-bottom: 1px solid #eee;
+    }
+    form {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    input {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>SSE チャット</h1>
+  <ul id="messages"></ul>
+  <form id="form">
+    <input id="input" placeholder="メッセージを入力" autocomplete="off">
+    <button type="submit">送信</button>
+  </form>
+
+  <script>
+    // ⚠️ 講師が案内するサーバーの URL に書き換えてください（最後に / は付けない）
+    const SERVER_URL = "https://sse-chat.deno.dev";
+
+    const messages = document.getElementById("messages");
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+
+    // サーバーからのメッセージを受け取る（SSE）
+    const eventSource = new EventSource(`${SERVER_URL}/events`);
+    eventSource.onmessage = (event) => {
+      addMessage(event.data);
+    };
+
+    // 届いたメッセージを画面のリストに追加する
+    function addMessage(text) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      messages.appendChild(li);
+    }
+
+    // メッセージを送信する（普通の HTTP POST）
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!input.value) return;
+      await fetch(`${SERVER_URL}/send`, {
+        method: "POST",
+        body: input.value,
+      });
+      input.value = "";
+    });
+  </script>
+</body>
+</html>
