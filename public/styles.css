@@ -289,10 +289,12 @@ h1 {
 }
 
 .video-player {
+  position: relative; /* コントロールバー等の絶対配置の基準にする */
   width: 100%;
   aspect-ratio: 16 / 9;
   border: 1px solid #ccc;
   border-radius: 8px;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -303,6 +305,158 @@ h1 {
 .video-player video {
   width: 100%;
   height: 100%;
+  cursor: pointer; /* クリックで再生/一時停止できる */
+}
+
+/* symbol定義用のSVGスプライト自体は画面に表示しない */
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: none;
+}
+
+.icon-lg {
+  width: 32px;
+  height: 32px;
+}
+
+/* LIVEバッジ：常時左上に表示する（シークバーの代わり） */
+.video-live-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--hibiscus);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.video-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: video-live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes video-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* 読み込み中・接続エラー時の状態表示（読み込みが済んだら[hidden]で隠す） */
+.video-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.video-status[hidden] {
+  display: none;
+}
+
+.video-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--hibiscus);
+  border-radius: 50%;
+  animation: video-spinner-spin 0.8s linear infinite;
+}
+
+@keyframes video-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.video-status-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-status-text {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* エラー中はスピナーを、読み込み中はエラー文言を隠す（main.jsがdata-modeを切り替える） */
+.video-status[data-mode="loading"] .video-status-error,
+.video-status[data-mode="error"] .video-spinner {
+  display: none;
+}
+
+/* オリジナルのコントロールバー。ホバー/操作時のみ表示し、無操作でフェードアウトする */
+.video-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.video-player:hover .video-controls,
+.video-player.controls-visible .video-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.video-controls-spacer {
+  flex: 1;
+}
+
+.video-control-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.video-control-button:hover {
+  color: var(--hibiscus);
+}
+
+.video-control-button .icon {
+  fill: currentColor;
+  stroke: currentColor;
 }
 
 .video-meta {
