@@ -4,10 +4,103 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>視聴画面</title>
-    <link rel="stylesheet" href="/styles.css" />
-    <script src="/main.js" defer></script>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="./main.js" defer></script>
   </head>
   <body>
     <h1>視聴画面</h1>
+    <div class="layout">
+      <div class="video-area">
+        <div class="video-player">
+          <video id="video" controls></video>
+        </div>
+        <div class="video-meta">
+          <h2 class="video-title">動画タイトル</h2>
+          <p class="video-description">動画の説明文がここに表示されます。</p>
+        </div>
+      </div>
+      <div class="sidebar">
+        <ul class="comment-area">
+          <!-- コメント・アイテムはSSEで受信して main.js が動的に追加する -->
+        </ul>
+        <form class="send-area">
+          <div class="item-panel">
+            <button type="button" class="item-toggle" aria-expanded="false">
+              アイテム一覧
+            </button>
+            <div class="item-price-filter" hidden>
+              <!-- 値段は実データがないため、main.js でダミーの値段を割り振って絞り込む -->
+              <button
+                type="button"
+                class="item-price-button"
+                data-price-filter="all"
+                aria-pressed="true"
+              >
+                すべて
+              </button>
+              <button
+                type="button"
+                class="item-price-button"
+                data-price-filter="low"
+                aria-pressed="false"
+              >
+                1000円
+              </button>
+              <button
+                type="button"
+                class="item-price-button"
+                data-price-filter="mid"
+                aria-pressed="false"
+              >
+                5000円
+              </button>
+              <button
+                type="button"
+                class="item-price-button"
+                data-price-filter="high"
+                aria-pressed="false"
+              >
+                10000円
+              </button>
+            </div>
+            <div class="item-list-row" hidden>
+              <button
+                type="button"
+                class="item-page-button item-page-prev"
+                aria-label="前のアイテム"
+              >
+                ◀
+              </button>
+              <div class="item-list">
+                <!-- アイテム一覧はAPIで取得して main.js が動的に追加する -->
+              </div>
+              <button
+                type="button"
+                class="item-page-button item-page-next"
+                aria-label="次のアイテム"
+              >
+                ▶
+              </button>
+            </div>
+          </div>
+          <div class="comment-input-row">
+            <textarea
+              class="comment-input"
+              placeholder="コメントを入力"
+              rows="1"
+            ></textarea>
+            <button
+              type="button"
+              class="anonymous-toggle"
+              aria-pressed="false"
+            >
+              匿名
+            </button>
+            <button type="submit" class="send-button">送信</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </body>
 </html>
