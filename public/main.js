@@ -1,0 +1,322 @@
+/**
+ * 動画プレイヤー（HLS再生）
+ */
+const STREAM_URL = "https://intern-hls-server.tdmi0e341.workers.dev/stream.m3u8";
+const video = document.getElementById("video");
+
+if (video) {
+  if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls({ capLevelToPlayerSize: true });
+    hls.loadSource(STREAM_URL);
+    hls.attachMedia(video);
+  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    /* HLSを使えそうか？
+    video.canPlayType("application/vnd.apple.mpegurl")
+    m3u8のMIMEタイプ：application/vnd.apple.mpegurl
+    戻り値:"", "maybe", "probably" */
+    video.src = STREAM_URL;
+  }
+}
+
+/**
+ * コメント受信（SSE）
+ * サーバーからのイベントを受け取り、コメント・アイテムを画面に追加する。
+ */
+const COMMENT_EVENTS_URL =
+  "https://intern-comment-server.intern-comment-server.deno.net/events";
+const commentArea = document.querySelector(".comment-area");
+
+// コメント欄に保持する最大件数。超えた分は古い順に削除する。
+const MAX_COMMENT_COUNT = 200;
+
+// コメント欄の件数がMAX_COMMENT_COUNTを超えていたら、古い順に削除する。
+function trimComments() {
+  while (commentArea.children.length > MAX_COMMENT_COUNT) {
+    commentArea.removeChild(commentArea.firstElementChild);
+  }
+}
+
+if (commentArea) {
+  const eventSource = new EventSource(COMMENT_EVENTS_URL);
+
+  eventSource.onmessage = (event) => {
+    // event.data は文字列。中身はJSON文字列で送られてくる想定なのでパースする。
+    //パース：jsonをjsのオブジェクトに変換すること
+    let payload;
+    try {//tryはエラーが起きそうな処理 catchにエラーが起きたときの処理
+      payload = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (!payload) return;
+
+    // text プロパティがあれば「コメント」として表示する。
+    if (payload.text) {
+      addComment(payload.text);
+    }
+    // item プロパティがあれば「アイテム」として表示する。
+    if (payload.item) {
+      addItem(payload.item.iconUrl ?? "", payload.item.name ?? ""); //Null合体演算子：左側の値が null または undefined のときだけ、右側の値を代わりに使います
+    }
+  };
+}
+
+/**
+ * アイテム一覧の取得・表示・開閉
+ * アイテム送信は行わず、一覧の表示のみを行う。
+ */
+const ITEMS_URL =
+  "https://intern-comment-server.intern-comment-server.deno.net/items";
+const ITEMS_PER_PAGE = 5; // アイコン画像の通信量削減のため、一度に表示する件数を絞る
+const itemToggle = document.querySelector(".item-toggle");
+const itemPriceFilter = document.querySelector(".item-price-filter");
+const itemListRow = document.querySelector(".item-list-row");
+const itemList = document.querySelector(".item-list");
+const itemPagePrev = document.querySelector(".item-page-prev");
+const itemPageNext = document.querySelector(".item-page-next");
+
+if (
+  itemToggle &&
+  itemPriceFilter &&
+  itemListRow &&
+  itemList &&
+  itemPagePrev &&
+  itemPageNext
+) {
+  // 開閉ボタン：押すたびに一覧（絞り込みボタン＋アイテム）の表示・非表示を切り替える。
+  itemToggle.addEventListener("click", () => {
+    const isExpanded = itemToggle.getAttribute("aria-expanded") === "true";
+    itemToggle.setAttribute("aria-expanded", String(!isExpanded));
+    itemPriceFilter.hidden = isExpanded; // 開いていたら隠す、隠れていたら表示する
+    itemListRow.hidden = isExpanded;
+  });
+
+  // APIから取得した全アイテム。表示中の絞り込み・ページに応じて、この中から表示分だけをDOMに追加する。
+  let allItems = [];
+  let currentFilter = "all";
+  let currentPage = 0;
+
+  // 値段データがAPIから届かないため、id文字列からダミーの値段を決定的に算出する。
+  // （同じidなら常に同じ値段になるようにする）
+  const DUMMY_PRICE_TIERS = [1000, 5000, 10000];
+  function dummyPrice(item) {
+    const id = item.id ?? item.name ?? "";
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = (hash * 31 + id.charCodeAt(i)) % DUMMY_PRICE_TIERS.length;
+    }
+    return DUMMY_PRICE_TIERS[hash];
+  }
+
+  // 絞り込み条件（すべて／1000円／5000円／10000円）に合うアイテムだけを返す。
+  function filterItems(items, filter) {
+    if (filter === "low") return items.filter((item) => item.price === 1000);
+    if (filter === "mid") return items.filter((item) => item.price === 5000);
+    if (filter === "high")
+      return items.filter((item) => item.price === 10000);
+    return items;
+  }
+
+  // 1件分のアイテムを表示するボタン要素を作る（アイコン＋下に小さく名前・値段）。
+  function createItemButton(item) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "item-button";
+
+    const img = document.createElement("img");
+    img.className = "item-button-icon";
+    img.src = item.iconUrl ?? "";
+    img.alt = item.name ?? "";
+
+    const name = document.createElement("span");
+    name.className = "item-button-name";
+    name.textContent = item.name ?? "";
+
+    const price = document.createElement("span");
+    price.className = "item-button-price";
+    // 値段が算出できなかった場合は「価格不明」と表示する。
+    price.textContent =
+      typeof item.price === "number" ? `${item.price}円` : "価格不明";
+
+    button.append(img, name, price);
+    return button;
+  }
+
+  // 指定ページ分のアイテムだけをDOMに追加し直す。
+  // 表示していないページのアイコン画像はDOMに存在しないため読み込まれず、通信量が抑えられる。
+  function renderPage(page) {
+    const filteredItems = filterItems(allItems, currentFilter);
+
+    itemList.innerHTML = "";
+
+    // 絞り込み条件に合うアイテムが1件もない場合は、その旨を表示してページ送りを無効にする。
+    if (filteredItems.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "item-list-empty";
+      empty.textContent = "該当する値段のアイテムがありません";
+      itemList.appendChild(empty);
+
+      currentPage = 0;
+      itemPagePrev.disabled = true;
+      itemPageNext.disabled = true;
+      return;
+    }
+
+    const maxPage = Math.max(
+      0,
+      Math.ceil(filteredItems.length / ITEMS_PER_PAGE) - 1,
+    );
+    currentPage = Math.min(Math.max(page, 0), maxPage);
+
+    const start = currentPage * ITEMS_PER_PAGE;
+    const pageItems = filteredItems.slice(start, start + ITEMS_PER_PAGE);
+    for (const item of pageItems) {
+      itemList.appendChild(createItemButton(item));
+    }
+
+    itemPagePrev.disabled = currentPage === 0;
+    itemPageNext.disabled = currentPage >= maxPage;
+  }
+
+  itemPagePrev.addEventListener("click", () => renderPage(currentPage - 1));
+  itemPageNext.addEventListener("click", () => renderPage(currentPage + 1));
+
+  // 絞り込みボタン：押されたボタンをアクティブにし、1ページ目から表示し直す。
+  itemPriceFilter.addEventListener("click", (event) => {
+    const button = event.target.closest(".item-price-button");
+    if (!button) return;
+
+    for (const other of itemPriceFilter.querySelectorAll(
+      ".item-price-button",
+    )) {
+      other.setAttribute("aria-pressed", String(other === button));
+    }
+
+    currentFilter = button.dataset.priceFilter;
+    renderPage(0);
+  });
+
+  const ITEMS_POLLING_INTERVAL = 60 * 1000; // 1分ごとにアイテム一覧を取得し直す
+
+  // アイテム一覧を取得し、現在の絞り込み・ページを維持したまま表示を更新する。
+  function fetchItems() {
+    fetch(ITEMS_URL)
+      .then((response) => response.json())
+      .then((data) => {
+        const items = data.items ?? [];
+        allItems = items.map((item) => ({
+          ...item,
+          price: dummyPrice(item),
+        }));
+        renderPage(currentPage);
+      })
+      .catch((error) => {
+        console.error("アイテム一覧の取得に失敗しました", error);
+      });
+  }
+
+  fetchItems(); // 初回はページ読み込み時に取得する
+  setInterval(fetchItems, ITEMS_POLLING_INTERVAL); // 以降は1分ごとにポーリングする
+}
+
+/**
+ * コメント送信（POST）
+ * フォーム送信時に入力欄のテキストをサーバーへ送信する。
+ * 送信したコメント自体は、上のSSE受信処理経由で画面に反映される。
+ */
+const COMMENT_POST_URL =
+  "https://intern-comment-server.intern-comment-server.deno.net/messages";
+const sendArea = document.querySelector(".send-area");
+const commentInput = document.querySelector(".comment-input");
+
+if (sendArea && commentInput) {
+  // 入力内容の行数に合わせて高さを自動調整する。
+  // CSS側で.comment-input-rowをflex-end揃えにしているため、高さが増えるとテキストエリアは下端を基準に上方向へ伸びる。
+  const resizeCommentInput = () => {
+    commentInput.style.height = "auto"; // 一度リセットしてscrollHeightを正しく測る
+    commentInput.style.height = `${commentInput.scrollHeight}px`;
+  };
+  commentInput.addEventListener("input", resizeCommentInput);
+
+
+  commentInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.isComposing) return; // IME変換確定のEnterは無視する
+    if (event.shiftKey) return; // Shift+Enterは改行のまま何もしない
+
+    event.preventDefault(); // 通常のEnterによる改行入力を防ぐ
+    sendArea.requestSubmit(); // フォームのsubmitイベントを発火させる
+  });
+
+  sendArea.addEventListener("submit", async (event) => {
+    event.preventDefault(); // フォームの通常送信（ページ再読み込み）を防ぐ。
+    //これをしないとJavaScriptでの処理より先にページ遷移が起きる。
+    //htmlのformはデフォルトで「今表示しているページ自身」に送信されるので、押すたびリロードされてしまう
+
+    const text = commentInput.value.trim();//前後の空白を除いたテキストを取得
+    if (!text) return;//空文字だった場合コメント送信しない
+
+    try {
+      await fetch(COMMENT_POST_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }, //jsonで送ることを伝えている
+        body: JSON.stringify({ text }), //JSオブジェクト{ text: "こんにちは" }をJSON文字列'{"text":"こんにちは"}'に変換
+      });
+    } catch (error) {
+      console.error("コメントの送信に失敗しました", error);
+      return;
+    }
+
+    commentInput.value = "";
+    resizeCommentInput(); // 高さも1行分に戻す
+  });
+}
+
+/**
+ * 通常のコメント（テキストのみ、コメント1行分）を画面に追加する。
+ */
+function addComment(text) {
+  const li = document.createElement("li"); //まだどこにも表示されていない状態で<li></li>を作る
+  li.className = "comment-item"; //属性を設定する。今で言えば、<li class="coment-item"></li>
+
+  // コメント投稿者のアイコンは届かないため、見た目確認用のダミーアイコンを表示する。
+  const img = document.createElement("img");
+  img.className = "comment-icon";
+  img.alt = "";
+
+  const p = document.createElement("p");
+  p.className = "comment-text";
+  p.textContent = text;
+
+  li.append(img, p);//liにimgとpを追加
+
+  commentArea.appendChild(li); //20行で持ってきたコメントエリアの、子要素とする
+  trimComments(); // 上限件数を超えたら古いコメントから削除する
+
+  // 新しい行が増えたら一番下（最新）が見えるようにスクロールする。
+  commentArea.scrollTop = commentArea.scrollHeight;
+}
+
+/**
+ * アイテム（コメント2行分の大きさで画像を表示し、その下にコメント1行分で名前を表示）を画面に追加する。
+ */
+function addItem(iconUrl, name) {
+  const li = document.createElement("li"); //まだどこにも表示されていない状態で<li></li>を作る
+  li.className = "comment-item item-comment"; //属性を設定する。今で言えば、<li class="coment-item item-comment"></li>
+
+  const img = document.createElement("img");
+  img.className = "item-icon";
+  img.src = iconUrl;
+  img.alt = name;
+
+  const p = document.createElement("p");
+  p.className = "comment-text";
+  p.textContent = `${name}が送られました！`;
+
+  li.append(img, p);//liにimgとpを追加
+
+  commentArea.appendChild(li); //20行で持ってきたコメントエリアの、子要素とする
+  trimComments(); // 上限件数を超えたら古いコメントから削除する
+
+  // 新しい行が増えたら一番下（最新）が見えるようにスクロールする。
+  commentArea.scrollTop = commentArea.scrollHeight;//スクロールの高さ分、スクロールする
+}
