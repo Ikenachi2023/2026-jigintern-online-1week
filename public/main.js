@@ -3,19 +3,147 @@
  */
 const STREAM_URL = "https://intern-hls-server.tdmi0e341.workers.dev/stream.m3u8";
 const video = document.getElementById("video");
+const videoPlayer = document.querySelector(".video-player");
+const videoStatus = document.querySelector(".video-status");
+const playToggle = document.querySelector(".video-play-toggle");
+const playIconUse = document.getElementById("play-icon-use");
+const muteToggle = document.querySelector(".video-mute-toggle");
+const muteIconUse = document.getElementById("mute-icon-use");
+const fullscreenToggle = document.querySelector(".video-fullscreen-toggle");
+const fullscreenIconUse = document.getElementById("fullscreen-icon-use");
+
+// 読み込み中／エラーの状態表示を切り替える。nullなら状態表示自体を隠す。
+function setVideoStatus(mode) {
+  if (!videoStatus) return;
+  if (mode === null) {
+    videoStatus.hidden = true;
+    return;
+  }
+  videoStatus.hidden = false;
+  videoStatus.dataset.mode = mode;
+}
 
 if (video) {
+  setVideoStatus("loading");
+
   if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({ capLevelToPlayerSize: true });
     hls.loadSource(STREAM_URL);
     hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (data.fatal) setVideoStatus("error");
+    });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     /* HLSを使えそうか？
     video.canPlayType("application/vnd.apple.mpegurl")
     m3u8のMIMEタイプ：application/vnd.apple.mpegurl
     戻り値:"", "maybe", "probably" */
     video.src = STREAM_URL;
+    video.addEventListener("error", () => setVideoStatus("error"));
   }
+
+  // 再生が始まったら状態表示を消し、バッファリングで止まったら読み込み中に戻す。
+  video.addEventListener("playing", () => setVideoStatus(null));
+  video.addEventListener("waiting", () => setVideoStatus("loading"));
+}
+
+/**
+ * 動画のオリジナルコントロール（再生/一時停止・ミュート・フルスクリーン）
+ */
+if (
+  video &&
+  videoPlayer &&
+  playToggle &&
+  playIconUse &&
+  muteToggle &&
+  muteIconUse &&
+  fullscreenToggle &&
+  fullscreenIconUse
+) {
+  function togglePlay() {
+    if (video.paused) video.play();
+    else video.pause();
+  }
+
+  video.addEventListener("play", () => {
+    playIconUse.setAttribute("href", "#icon-pause");
+    playToggle.setAttribute("aria-label", "一時停止");
+  });
+
+  video.addEventListener("pause", () => {
+    playIconUse.setAttribute("href", "#icon-play");
+    playToggle.setAttribute("aria-label", "再生");
+    // 一時停止中は操作しやすいよう、コントロールバーを表示したままにする。
+    clearTimeout(controlsFadeTimer);
+    videoPlayer.classList.add("controls-visible");
+  });
+
+  playToggle.addEventListener("click", togglePlay);
+  video.addEventListener("click", togglePlay);
+
+  // コメント入力中などテキストを打っているときはスペースキーを再生/一時停止に奪わない。
+  document.addEventListener("keydown", (event) => {
+    if (event.code !== "Space") return;
+    const target = event.target;
+    const isTyping =
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable);
+    if (isTyping) return;
+
+    event.preventDefault();
+    togglePlay();
+  });
+
+  muteToggle.addEventListener("click", () => {
+    video.muted = !video.muted;
+    muteIconUse.setAttribute(
+      "href",
+      video.muted ? "#icon-volume-off" : "#icon-volume-on",
+    );
+    muteToggle.setAttribute("aria-pressed", String(video.muted));
+    muteToggle.setAttribute("aria-label", video.muted ? "ミュート解除" : "ミュート");
+  });
+
+  fullscreenToggle.addEventListener("click", () => {
+    if (document.fullscreenElement === videoPlayer) {
+      document.exitFullscreen();
+    } else {
+      videoPlayer.requestFullscreen();
+    }
+  });
+
+  document.addEventListener("fullscreenchange", () => {
+    const isFullscreen = document.fullscreenElement === videoPlayer;
+    fullscreenIconUse.setAttribute(
+      "href",
+      isFullscreen ? "#icon-fullscreen-exit" : "#icon-fullscreen-enter",
+    );
+    fullscreenToggle.setAttribute(
+      "aria-label",
+      isFullscreen ? "全画面表示を終了" : "全画面表示",
+    );
+  });
+
+  // マウス操作があった間だけコントロールバーを表示し、無操作が続いたらフェードアウトする。
+  const CONTROLS_FADE_DELAY = 2500;
+  let controlsFadeTimer;
+
+  function showControls() {
+    videoPlayer.classList.add("controls-visible");
+    clearTimeout(controlsFadeTimer);
+    if (video.paused) return; // 一時停止中はフェードアウトさせない
+    controlsFadeTimer = setTimeout(() => {
+      videoPlayer.classList.remove("controls-visible");
+    }, CONTROLS_FADE_DELAY);
+  }
+
+  videoPlayer.addEventListener("mousemove", showControls);
+  videoPlayer.addEventListener("mouseleave", () => {
+    clearTimeout(controlsFadeTimer);
+    if (!video.paused) videoPlayer.classList.remove("controls-visible");
+  });
 }
 
 /**
