@@ -30,6 +30,10 @@ if (video) {
     const hls = new Hls({ capLevelToPlayerSize: true });
     hls.loadSource(STREAM_URL);
     hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      // autoplay属性だけでは再生されない環境があるため、明示的に呼ぶ（失敗は無視してよい）
+      video.play().catch(() => {});
+    });
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (data.fatal) setVideoStatus("error");
     });
@@ -39,6 +43,9 @@ if (video) {
     m3u8のMIMEタイプ：application/vnd.apple.mpegurl
     戻り値:"", "maybe", "probably" */
     video.src = STREAM_URL;
+    video.addEventListener("loadedmetadata", () => {
+      video.play().catch(() => {});
+    });
     video.addEventListener("error", () => setVideoStatus("error"));
   }
 

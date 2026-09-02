@@ -94,7 +94,8 @@
       <div class="video-area">
         <div class="video-player">
           <!-- controls属性は使わず、下のvideo-controlsでオリジナルのUIを描画する -->
-          <video id="video" playsinline></video>
+          <!-- ブラウザの自動再生ポリシー上、autoplayにはmutedが必須 -->
+          <video id="video" playsinline autoplay muted></video>
 
           <!-- ライブ配信のためシークバーは置かず、LIVE表示のみ常時出す -->
           <div class="video-live-badge">
@@ -127,11 +128,11 @@
             <button
               type="button"
               class="video-control-button video-mute-toggle"
-              aria-label="ミュート"
-              aria-pressed="false"
+              aria-label="ミュート解除"
+              aria-pressed="true"
             >
               <svg class="icon">
-                <use id="mute-icon-use" href="#icon-volume-on"></use>
+                <use id="mute-icon-use" href="#icon-volume-off"></use>
               </svg>
             </button>
             <div class="video-controls-spacer"></div>
