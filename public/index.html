@@ -242,7 +242,10 @@
               アイテムを送る
             </button>
             <div class="item-price-filter" hidden>
-              <!-- 値段は実データがないため、main.js でダミーの値段を割り振って絞り込む -->
+              <!-- 値段の絞り込みはAPIのcostフィールド（実データ）を3つの帯域に分けて
+                   条件にする。プレミアムは上限を設けない開放区間にして、400円超の
+                   金額（例:500円）のアイテムが今後追加されても必ずどれかの帯域に
+                   入るようにする -->
               <button
                 type="button"
                 class="item-price-button"
@@ -257,7 +260,7 @@
                 data-price-filter="low"
                 aria-pressed="false"
               >
-                1000円
+                プチギフト
               </button>
               <button
                 type="button"
@@ -265,7 +268,7 @@
                 data-price-filter="mid"
                 aria-pressed="false"
               >
-                5000円
+                ギフト
               </button>
               <button
                 type="button"
@@ -273,7 +276,7 @@
                 data-price-filter="high"
                 aria-pressed="false"
               >
-                10000円
+                プレミアム
               </button>
             </div>
             <div class="item-list-row" hidden>
