@@ -44,10 +44,7 @@ if (video) {
       if (data.fatal) setVideoStatus("error");
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-    /* HLSを使えそうか？
-    video.canPlayType("application/vnd.apple.mpegurl")
-    m3u8のMIMEタイプ：application/vnd.apple.mpegurl
-    戻り値:"", "maybe", "probably" */
+    // hls.jsが使えない環境（Safariなど）では、ブラウザネイティブのHLS再生にフォールバックする。
     video.src = STREAM_URL;
     video.addEventListener("loadedmetadata", () => {
       video.play().catch(() => {});
@@ -329,9 +326,9 @@ if (commentArea) {
 
   eventSource.onmessage = (event) => {
     // event.data は文字列。中身はJSON文字列で送られてくる想定なのでパースする。
-    //パース：jsonをjsのオブジェクトに変換すること
+    // 不正なJSONが送られてくる可能性もあるため、パース失敗時は黙って無視する。
     let payload;
-    try {//tryはエラーが起きそうな処理 catchにエラーが起きたときの処理
+    try {
       payload = JSON.parse(event.data);
     } catch {
       return;
@@ -341,7 +338,7 @@ if (commentArea) {
     // textとitemの両方があれば「コメント付きアイテム」として1つにまとめて表示する。
     if (payload.text && payload.item) {
       addItemWithComment(
-        payload.item.iconUrl ?? "", //Null合体演算子：左側の値が null または undefined のときだけ、右側の値を代わりに使います
+        payload.item.iconUrl ?? "",
         payload.item.name ?? "",
         payload.text,
       );
@@ -379,7 +376,7 @@ let selectedItem = null;
 // 選択状態に合わせて、入力欄上のチップ表示を更新する。
 // アイテム名は表示せず、×ボタンのaria-labelにだけ含めてスクリーンリーダーに伝える。
 function renderSelectedItemChip() {
-  if (!selectedItemChip) return;
+  if (!selectedItemChip || !selectedItemIcon) return;
   selectedItemChip.hidden = !selectedItem;
   if (!selectedItem) return;
   selectedItemIcon.src = selectedItem.iconUrl ?? "";
@@ -622,14 +619,12 @@ if (sendArea && commentInput && sendButton && sendError) {
   }
 
   sendArea.addEventListener("submit", async (event) => {
-    event.preventDefault(); // フォームの通常送信（ページ再読み込み）を防ぐ。
-    //これをしないとJavaScriptでの処理より先にページ遷移が起きる。
-    //htmlのformはデフォルトで「今表示しているページ自身」に送信されるので、押すたびリロードされてしまう
+    // formはデフォルトで自ページへ送信され、そのままだと押すたびリロードされてしまうため防ぐ。
+    event.preventDefault();
 
-    const text = commentInput.value.trim(); //前後の空白を除いたテキストを取得
+    const text = commentInput.value.trim();
 
-    // bodyを作り、要素として追加していく
-    //両方空なら送信しない
+    // テキスト・アイテムのどちらも無ければ送信しない
     const body = {};
     if (text) body.text = text;
     if (selectedItem) body.itemId = selectedItem.id;
@@ -641,7 +636,7 @@ if (sendArea && commentInput && sendButton && sendError) {
     try {
       await fetch(COMMENT_POST_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" }, //jsonで送ることを伝えている
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
     } catch (error) {
@@ -668,10 +663,10 @@ if (sendArea && commentInput && sendButton && sendError) {
  * 通常のコメント（テキストのみ、コメント1行分）を画面に追加する。
  */
 function addComment(text) {
-  const li = document.createElement("li"); //まだどこにも表示されていない状態で<li></li>を作る
-  li.className = "comment-item"; //属性を設定する。今で言えば、<li class="coment-item"></li>
+  const li = document.createElement("li");
+  li.className = "comment-item";
 
-  // コメント投稿者のアイコンは届かないため、見た目確認用のダミーアイコンを表示する。
+  // コメント投稿者のアイコンは届かないため、見た目確認用のダミーアイコン（styles.css参照）を表示する。
   const img = document.createElement("img");
   img.className = "comment-icon";
   img.alt = "";
@@ -680,7 +675,7 @@ function addComment(text) {
   p.className = "comment-text";
   p.textContent = text;
 
-  li.append(img, p);//liにimgとpを追加
+  li.append(img, p);
 
   appendCommentItem(li);
   spawnDanmakuComment(text);
@@ -690,8 +685,8 @@ function addComment(text) {
  * アイテム（コメント2行分の大きさで画像を表示し、その下にコメント1行分で名前を表示）を画面に追加する。
  */
 function addItem(iconUrl, name) {
-  const li = document.createElement("li"); //まだどこにも表示されていない状態で<li></li>を作る
-  li.className = "comment-item item-comment"; //属性を設定する。今で言えば、<li class="coment-item item-comment"></li>
+  const li = document.createElement("li");
+  li.className = "comment-item item-comment";
 
   const img = document.createElement("img");
   img.className = "item-icon";
@@ -703,7 +698,7 @@ function addItem(iconUrl, name) {
   p.className = "comment-text";
   p.textContent = caption;
 
-  li.append(img, p);//liにimgとpを追加
+  li.append(img, p);
 
   appendCommentItem(li);
   spawnDanmakuComment(caption);
@@ -711,7 +706,6 @@ function addItem(iconUrl, name) {
 
 /**
  * コメント付きで届いたアイテムを画面に追加する。
- * アイコンの大きさはaddItemと同じまま、実際のコメント本文を主役にして表示する。
  */
 function addItemWithComment(iconUrl, name, text) {
   const li = document.createElement("li");
