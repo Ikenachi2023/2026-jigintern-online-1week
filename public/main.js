@@ -216,6 +216,10 @@ if (
 const COMMENT_EVENTS_URL =
   "https://intern-comment-server.intern-comment-server.deno.net/events";
 const commentArea = document.querySelector(".comment-area");
+const newCommentNotice = document.querySelector(".new-comment-notice");
+const newCommentNoticeLabel = document.querySelector(
+  ".new-comment-notice-label",
+);
 
 // コメント欄に保持する最大件数。超えた分は古い順に削除する。
 const MAX_COMMENT_COUNT = 200;
@@ -225,6 +229,65 @@ function trimComments() {
   while (commentArea.children.length > MAX_COMMENT_COUNT) {
     commentArea.removeChild(commentArea.firstElementChild);
   }
+}
+
+// 過去ログを見ている間に届いた新着件数。ボタンのラベル文言に連動するため、
+// 更新箇所をここ1つにまとめる。表示・非表示自体はスクロール位置だけで決まる
+// （＝新着0件でも最下部でなければ「下に戻る」ボタンとして出続ける）。
+let unseenCommentCount = 0;
+
+// スクロール位置が最下部付近かどうか。
+// コメント件数が少なくスクロール自体が発生しない場合はscrollHeightとclientHeightが
+// ほぼ同値になるはずだが、flexレイアウトの端数誤差でscrollHeightがわずかに大きく
+// 判定され「上にいる」と誤判定されることがあるため、まずスクロール可能かどうかを見る。
+function isCommentAreaScrolledToBottom() {
+  const { scrollHeight, scrollTop, clientHeight } = commentArea;
+  if (scrollHeight <= clientHeight) return true; // そもそもスクロールできる余地がない
+  return scrollHeight - scrollTop - clientHeight <= 4;
+}
+
+// ボタンの表示・非表示とラベルを、現在のスクロール位置とunseenCommentCountから
+// 導出する。呼び出し元ごとに条件を書くとhiddenとラベルがずれるため、常にここを通す。
+function updateNewCommentNotice() {
+  if (!newCommentNotice) return;
+  const atBottom = isCommentAreaScrolledToBottom();
+  if (atBottom) unseenCommentCount = 0; // 最下部まで見ているなら新着扱いにしない
+
+  newCommentNotice.hidden = atBottom;
+  if (newCommentNoticeLabel) {
+    newCommentNoticeLabel.textContent =
+      unseenCommentCount > 0 ? `新着${unseenCommentCount}件` : "";
+  }
+}
+
+function scrollCommentAreaToBottom() {
+  commentArea.scrollTop = commentArea.scrollHeight;
+  updateNewCommentNotice();
+}
+
+if (newCommentNotice) {
+  newCommentNotice.addEventListener("click", scrollCommentAreaToBottom);
+}
+
+if (commentArea) {
+  // 新着の有無にかかわらず、スクロールして最下部から離れたら「下に戻る」ボタンを出す。
+  commentArea.addEventListener("scroll", updateNewCommentNotice);
+}
+
+// コメント・アイテムの共通追加処理。追加前の時点で最下部を見ていた場合だけ
+// 自動スクロールし、そうでなければ新着通知ボタンの件数を増やす。
+function appendCommentItem(li) {
+  const wasAtBottom = isCommentAreaScrolledToBottom();
+
+  commentArea.appendChild(li);
+  trimComments(); // 上限件数を超えたら古いコメントから削除する
+
+  if (wasAtBottom) {
+    commentArea.scrollTop = commentArea.scrollHeight;
+  } else {
+    unseenCommentCount += 1;
+  }
+  updateNewCommentNotice();
 }
 
 if (commentArea) {
@@ -573,11 +636,7 @@ function addComment(text) {
 
   li.append(img, p);//liにimgとpを追加
 
-  commentArea.appendChild(li); //20行で持ってきたコメントエリアの、子要素とする
-  trimComments(); // 上限件数を超えたら古いコメントから削除する
-
-  // 新しい行が増えたら一番下（最新）が見えるようにスクロールする。
-  commentArea.scrollTop = commentArea.scrollHeight;
+  appendCommentItem(li);
 }
 
 /**
@@ -598,11 +657,7 @@ function addItem(iconUrl, name) {
 
   li.append(img, p);//liにimgとpを追加
 
-  commentArea.appendChild(li); //20行で持ってきたコメントエリアの、子要素とする
-  trimComments(); // 上限件数を超えたら古いコメントから削除する
-
-  // 新しい行が増えたら一番下（最新）が見えるようにスクロールする。
-  commentArea.scrollTop = commentArea.scrollHeight;//スクロールの高さ分、スクロールする
+  appendCommentItem(li);
 }
 
 /**
@@ -628,9 +683,5 @@ function addItemWithComment(iconUrl, name, text) {
 
   li.append(img, p, caption);
 
-  commentArea.appendChild(li);
-  trimComments(); // 上限件数を超えたら古いコメントから削除する
-
-  // 新しい行が増えたら一番下（最新）が見えるようにスクロールする。
-  commentArea.scrollTop = commentArea.scrollHeight;
+  appendCommentItem(li);
 }
