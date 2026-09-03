@@ -329,6 +329,7 @@ const ITEMS_URL =
   "https://intern-comment-server.intern-comment-server.deno.net/items";
 const ITEMS_PER_PAGE = 5; // アイコン画像の通信量削減のため、一度に表示する件数を絞る
 const itemToggle = document.querySelector(".item-toggle");
+const itemToggleLabel = document.querySelector(".item-toggle-label");
 const itemPriceFilter = document.querySelector(".item-price-filter");
 const itemListRow = document.querySelector(".item-list-row");
 const itemList = document.querySelector(".item-list");
@@ -385,11 +386,15 @@ if (
   itemPageNext
 ) {
   // 開閉ボタン：押すたびに一覧（絞り込みボタン＋アイテム）の表示・非表示を切り替える。
+  // 開いている間はラベルを「閉じる」に変え、押せば閉じられることが伝わるようにする。
   itemToggle.addEventListener("click", () => {
     const isExpanded = itemToggle.getAttribute("aria-expanded") === "true";
     itemToggle.setAttribute("aria-expanded", String(!isExpanded));
     itemPriceFilter.hidden = isExpanded; // 開いていたら隠す、隠れていたら表示する
     itemListRow.hidden = isExpanded;
+    if (itemToggleLabel) {
+      itemToggleLabel.textContent = isExpanded ? "アイテムを送る" : "閉じる";
+    }
   });
 
   // APIから取得した全アイテム。表示中の絞り込み・ページに応じて、この中から表示分だけをDOMに追加する。
