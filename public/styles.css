@@ -42,6 +42,13 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 新着通知ボタンを重ねる都合上、ネイティブのスクロールバーは非表示にする */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+
+.comment-area::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
 }
 
 .comment-item {
@@ -65,10 +72,18 @@ h1 {
   white-space: pre-wrap;
 }
 
+/* アイテム表示はコメントの有無にかかわらず同じ「ギフト到着」カードにする。
+   コメント付き（item-comment-message）とコメントなしで主役の要素は変わるため、
+   カード自体の装飾はここに集約し、主役テキストの強調だけ個別に足す。 */
 .item-comment {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #ffd6da;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff 0%, #fff5f6 100%);
+  animation: item-comment-pop 0.3s ease-out;
 }
 
 .item-icon {
@@ -81,16 +96,7 @@ h1 {
   text-align: center;
 }
 
-/* コメント付きで届いたアイテム。通常のアイテム表示より一段リッチな「ギフト到着」カードにする */
-.item-comment-message {
-  padding: 10px 12px;
-  border: 1px solid #ffd6da;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fff 0%, #fff5f6 100%);
-  animation: item-comment-pop 0.3s ease-out;
-}
-
-/* 実際のコメント本文が主役なので、アイテム表示より強調する */
+/* コメント付きで届いたアイテムは実際のコメント本文が主役なので、キャプションより強調する */
 .item-comment-message .comment-text {
   font-weight: 600;
 }
@@ -114,7 +120,7 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .item-comment-message {
+  .item-comment {
     animation: none;
   }
 }
@@ -783,9 +789,111 @@ h1 {
   gap: 16px;
 }
 
-.comment-area {
+/* 新着通知ボタンをコメント一覧の上に重ねて表示するため、位置決めの基準にする */
+.comment-area-wrap {
+  position: relative;
   flex: 1; /* 残りのスペースを埋める。send-areaが伸びた分だけここが縮む */
   min-height: 0;
+  display: flex;
+}
+
+.comment-area {
+  flex: 1;
+  min-height: 0;
+}
+
+/* display:flexを指定すると、hiddenの既定値(display:none)は打ち消されず
+   常にflex優先になってしまう（著者CSSがUAスタイルに勝つため）。
+   hidden属性のときだけ確実に非表示にする。 */
+.new-comment-notice[hidden] {
+  display: none;
+}
+
+.new-comment-notice {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--hibiscus);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  animation: new-comment-notice-in 0.2s ease-out;
+}
+
+/* シェブロン3枚を同じ位置に重ね、下方向への流れを表現する */
+.new-comment-notice-icon {
+  position: relative;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.new-comment-notice-icon svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  animation: new-comment-notice-chevron 1.2s ease-in-out infinite;
+}
+
+.new-comment-notice-icon svg:nth-child(1) {
+  animation-delay: 0s;
+}
+.new-comment-notice-icon svg:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.new-comment-notice-icon svg:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes new-comment-notice-chevron {
+  0% {
+    opacity: 0;
+    transform: translateY(-40%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(40%);
+  }
+}
+
+/* 新着0件（＝ただの「下に戻る」ボタン）のときはラベル分の余白を詰める */
+.new-comment-notice-label:empty {
+  display: none;
+}
+
+@keyframes new-comment-notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-comment-notice,
+  .new-comment-notice-icon svg {
+    animation: none;
+    opacity: 1; /* アニメーション無効時はシェブロンを静止表示する */
+  }
 }
 
 .send-area {
