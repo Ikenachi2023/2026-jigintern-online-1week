@@ -216,6 +216,18 @@
               </button>
             </div>
           </div>
+          <!-- 選択中のアイテム（1つまで）。main.js がアイテム選択時に表示し、×または送信完了で消す -->
+          <div class="selected-item-chip" hidden>
+            <img class="selected-item-icon" alt="" />
+            <span class="selected-item-name"></span>
+            <button
+              type="button"
+              class="selected-item-remove"
+              aria-label="アイテムの選択を解除"
+            >
+              ×
+            </button>
+          </div>
           <div class="comment-input-row">
             <textarea
               class="comment-input"
@@ -229,8 +241,13 @@
             >
               匿名
             </button>
-            <button type="submit" class="send-button">送信</button>
+            <button type="submit" class="send-button">
+              <span class="send-button-label">送信</span>
+              <span class="send-button-spinner" aria-hidden="true"></span>
+            </button>
           </div>
+          <!-- 送信失敗時のみ main.js が表示するエラーメッセージ -->
+          <p class="send-error" hidden></p>
         </form>
       </div>
     </div>
