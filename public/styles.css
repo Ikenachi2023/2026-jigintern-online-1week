@@ -81,6 +81,44 @@ h1 {
   text-align: center;
 }
 
+/* コメント付きで届いたアイテム。通常のアイテム表示より一段リッチな「ギフト到着」カードにする */
+.item-comment-message {
+  padding: 10px 12px;
+  border: 1px solid #ffd6da;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff 0%, #fff5f6 100%);
+  animation: item-comment-pop 0.3s ease-out;
+}
+
+/* 実際のコメント本文が主役なので、アイテム表示より強調する */
+.item-comment-message .comment-text {
+  font-weight: 600;
+}
+
+.item-comment-caption {
+  margin: 0;
+  color: #888;
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+@keyframes item-comment-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-comment-message {
+    animation: none;
+  }
+}
+
 .send-area {
   display: flex;
   flex-direction: column;
