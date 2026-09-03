@@ -9,6 +9,11 @@ const playToggle = document.querySelector(".video-play-toggle");
 const playIconUse = document.getElementById("play-icon-use");
 const muteToggle = document.querySelector(".video-mute-toggle");
 const muteIconUse = document.getElementById("mute-icon-use");
+const muteBadge = document.querySelector(".video-mute-badge");
+const muteBadgeIconUse = document.getElementById("mute-badge-icon-use");
+const volumeSlider = document.querySelector(".video-volume-slider");
+const centerFlash = document.querySelector(".video-center-flash");
+const centerFlashIconUse = document.getElementById("center-flash-icon-use");
 const fullscreenToggle = document.querySelector(".video-fullscreen-toggle");
 const fullscreenIconUse = document.getElementById("fullscreen-icon-use");
 
@@ -67,9 +72,24 @@ if (
   fullscreenToggle &&
   fullscreenIconUse
 ) {
+  // 中央に再生/一時停止アイコンを一瞬浮かばせる。初回自動再生時には呼ばず、
+  // ユーザー操作（動画クリック・再生ボタン・スペースキー）によるtogglePlay()からのみ呼ぶ。
+  function flashCenterIcon(iconId) {
+    if (!centerFlash || !centerFlashIconUse) return;
+    centerFlashIconUse.setAttribute("href", iconId);
+    centerFlash.classList.remove("is-flashing");
+    void centerFlash.offsetWidth; // reflowさせてアニメーションを再始動させる
+    centerFlash.classList.add("is-flashing");
+  }
+
   function togglePlay() {
-    if (video.paused) video.play();
-    else video.pause();
+    if (video.paused) {
+      video.play();
+      flashCenterIcon("#icon-play");
+    } else {
+      video.pause();
+      flashCenterIcon("#icon-pause");
+    }
   }
 
   video.addEventListener("play", () => {
@@ -103,15 +123,51 @@ if (
     togglePlay();
   });
 
-  muteToggle.addEventListener("click", () => {
-    video.muted = !video.muted;
-    muteIconUse.setAttribute(
-      "href",
-      video.muted ? "#icon-volume-off" : "#icon-volume-on",
-    );
-    muteToggle.setAttribute("aria-pressed", String(video.muted));
-    muteToggle.setAttribute("aria-label", video.muted ? "ミュート解除" : "ミュート");
-  });
+  // 音量スライダーを0まで下げた時に記憶しておく直前の音量。ミュート解除時にここへ戻す。
+  const DEFAULT_VOLUME = 0.75;
+  let lastNonZeroVolume = DEFAULT_VOLUME;
+
+  // ミュート状態に関わる表示（アイコン・aria属性・常時バッジ・音量スライダー位置）を
+  // まとめて更新する。呼び出し元ごとに更新箇所が漏れないよう、更新関数をここに集約する。
+  function setMuted(isMuted) {
+    video.muted = isMuted;
+    muteIconUse.setAttribute("href", isMuted ? "#icon-volume-off" : "#icon-volume-on");
+    muteToggle.setAttribute("aria-pressed", String(isMuted));
+    muteToggle.setAttribute("aria-label", isMuted ? "ミュート解除" : "ミュート");
+    if (muteBadgeIconUse) {
+      muteBadgeIconUse.setAttribute("href", isMuted ? "#icon-volume-off" : "#icon-volume-on");
+    }
+    if (muteBadge) muteBadge.hidden = !isMuted;
+    if (volumeSlider) {
+      if (isMuted) {
+        volumeSlider.value = "0";
+      } else {
+        // スライダーを0までドラッグしてミュートになったケースでは、直前の音量に戻す
+        if (video.volume === 0) video.volume = lastNonZeroVolume;
+        volumeSlider.value = String(video.volume);
+      }
+    }
+  }
+
+  muteToggle.addEventListener("click", () => setMuted(!video.muted));
+  // バッジは表示中は常にミュート中なので、クリック＝ミュート解除でよい
+  if (muteBadge) muteBadge.addEventListener("click", () => setMuted(false));
+
+  if (volumeSlider) {
+    video.volume = DEFAULT_VOLUME;
+
+    // スライダーとミュートは双方向連動：0まで下げるとミュート、動かすとミュート解除になる
+    volumeSlider.addEventListener("input", () => {
+      const value = Number(volumeSlider.value);
+      video.volume = value;
+      if (value > 0) lastNonZeroVolume = value;
+      setMuted(value === 0);
+    });
+  }
+
+  // video要素はautoplayのためHTML側でmuted属性を付けているので、その初期状態を
+  // バッジ・スライダー表示に反映させる。
+  setMuted(video.muted);
 
   fullscreenToggle.addEventListener("click", () => {
     if (document.fullscreenElement === videoPlayer) {
