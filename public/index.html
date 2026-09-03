@@ -76,6 +76,16 @@
           stroke-linejoin="round"
         />
       </symbol>
+      <symbol id="icon-arrow-down" viewBox="0 0 24 24">
+        <path
+          d="M6 10l6 6 6-6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </symbol>
       <symbol id="icon-status-error" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
         <circle cx="9" cy="10" r="1" fill="currentColor" />
@@ -188,9 +198,21 @@
         </div>
       </div>
       <div class="sidebar">
-        <ul class="comment-area">
-          <!-- コメント・アイテムはSSEで受信して main.js が動的に追加する -->
-        </ul>
+        <div class="comment-area-wrap">
+          <ul class="comment-area">
+            <!-- コメント・アイテムはSSEで受信して main.js が動的に追加する -->
+          </ul>
+          <!-- 最下部でない間だけ表示する「下に戻る」ボタン。新着があればその件数もあわせて示す -->
+          <button type="button" class="new-comment-notice" hidden>
+            <!-- シェブロンを3枚重ねて、上から下へ連続して降りていく矢印に見せる -->
+            <span class="new-comment-notice-icon" aria-hidden="true">
+              <svg><use href="#icon-arrow-down"></use></svg>
+              <svg><use href="#icon-arrow-down"></use></svg>
+              <svg><use href="#icon-arrow-down"></use></svg>
+            </span>
+            <span class="new-comment-notice-label"></span>
+          </button>
+        </div>
         <form class="send-area">
           <div class="item-panel">
             <button type="button" class="item-toggle" aria-expanded="false">
