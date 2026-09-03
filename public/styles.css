@@ -429,6 +429,8 @@ h1 {
   justify-content: center;
   background: #000;
   flex-shrink: 0;
+  /* コントロールのサイズを画面幅ではなく.video-player自体の実寸に追従させるため */
+  container-type: inline-size;
 }
 
 .video-player video {
@@ -489,6 +491,132 @@ h1 {
   }
   50% {
     opacity: 0.35;
+  }
+}
+
+/* ミュート中バッジ：LIVEバッジと対になる右上に常時（コントロールバーのフェード状態に関わらず）表示する */
+.video-mute-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  /* サイズだけだと気づきにくいため、弱めの明滅で視線を引く */
+  animation: video-mute-badge-pulse 1.6s ease-in-out infinite;
+}
+
+.video-mute-badge-label-hover {
+  display: none;
+}
+
+/* ホバー/フォーカス時は「クリックすると何が起きるか」がわかるようラベルを差し替える */
+.video-mute-badge:hover .video-mute-badge-label-default,
+.video-mute-badge:focus-visible .video-mute-badge-label-default {
+  display: none;
+}
+
+.video-mute-badge:hover .video-mute-badge-label-hover,
+.video-mute-badge:focus-visible .video-mute-badge-label-hover {
+  display: inline;
+}
+
+@keyframes video-mute-badge-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-mute-badge {
+    animation: none;
+  }
+}
+
+.video-mute-badge[hidden] {
+  display: none;
+}
+
+.video-mute-badge .icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+/* 再生/一時停止操作時に中央へ一瞬浮かんでフェードアウトするアイコン */
+.video-center-flash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  pointer-events: none; /* 演出のみで動画クリックを妨げない */
+}
+
+.video-center-flash .icon {
+  width: 32px;
+  height: 32px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.video-center-flash.is-flashing {
+  animation: video-center-flash-pop 0.6s ease-out;
+}
+
+@keyframes video-center-flash-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* 拡大縮小の動きを抑え、フェードのみにする */
+@media (prefers-reduced-motion: reduce) {
+  .video-center-flash.is-flashing {
+    animation: video-center-flash-fade 0.6s ease-out;
+  }
+}
+
+@keyframes video-center-flash-fade {
+  0% {
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -570,13 +698,15 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  /* .video-player の実寸（コンテナクエリ幅）に応じて大画面ではボタンも大きくスケールする */
+  width: clamp(36px, 6cqw, 56px);
+  height: clamp(36px, 6cqw, 56px);
   border: none;
   border-radius: 50%;
   background: transparent;
   color: #fff;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .video-control-button:hover {
@@ -586,6 +716,43 @@ h1 {
 .video-control-button .icon {
   fill: currentColor;
   stroke: currentColor;
+}
+
+.video-controls .icon {
+  width: clamp(20px, 3.5cqw, 32px);
+  height: clamp(20px, 3.5cqw, 32px);
+}
+
+/* 音量スライダー：ミュートボタンにホバーした時だけ横に展開する（ポインタデバイスのみ） */
+.video-volume-control {
+  display: flex;
+  align-items: center;
+}
+
+.video-volume-slider {
+  width: 0;
+  opacity: 0;
+  margin-left: 0;
+  overflow: hidden;
+  accent-color: var(--hibiscus);
+  cursor: pointer;
+  transition:
+    width 0.2s ease,
+    opacity 0.2s ease,
+    margin-left 0.2s ease;
+}
+
+.video-volume-control:hover .video-volume-slider {
+  width: clamp(60px, 10cqw, 100px);
+  opacity: 1;
+  margin-left: 4px;
+}
+
+/* タッチ端末（ホバーが無い＝iOS Safari等）はvideo.volumeの操作自体が効かないため、スライダーを出さない */
+@media (hover: none), (pointer: coarse) {
+  .video-volume-slider {
+    display: none;
+  }
 }
 
 .video-meta {
