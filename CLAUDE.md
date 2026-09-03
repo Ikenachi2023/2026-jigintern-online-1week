@@ -14,6 +14,14 @@
 - コメントSSE/POST/アイテムAPI: `https://intern-comment-server.*.deno.net`
   （仕様は https://github.com/jigintern/intern-comment-server の USAGE.md 参照）
 
+## 複数セッション運用
+ユーザーは複数セッションを同時起動し、それぞれ別ブランチで作業させることがある。
+- 作業ディレクトリは`git worktree add -b <branch> .claude/worktrees/<name>`で分けて
+  衝突を避ける（`EnterWorktree`はこの環境ではエラーになるため手動で行う）
+- `git rebase`など`main`を含む共有ブランチの履歴を書き換える操作は禁止。rebaseで
+  他セッションのコミットを意図せずdropし消失させる事故が過去にあった。取り込みは
+  `cherry-pick`や`merge`など履歴を書き換えない方法を使う
+
 ## コーディング方針
 - vanilla JS。`querySelector`で要素取得し、`if (el1 && el2 && ...)`で存在チェックしてから
   イベント登録するガード節パターンを徹底する
@@ -35,15 +43,11 @@
   （`node --check`によるJS構文チェック）を実行し、エラーがないことを確認する
 
 ## 禁止行為
-- ファイルの全削除・全内容の書き換え（Write等での丸ごと上書き）。既存ファイルは
-  差分編集（Edit）で変更する
+- 既存ファイルの丸ごと上書き（Write等）・全削除。差分編集（Edit）を使う
 - `git reset --hard`, `git push --force`, `git clean`, `rm -rf`など、既存の変更を
   破壊する操作
-- `git rebase`など`main`を含む共有ブランチの履歴を書き換える操作。ユーザーは複数
-  セッションを同時起動しそれぞれ別ブランチで作業させることがあるため、rebaseで
-  他セッションのコミットを意図せずdropし消失させる事故が過去に起きている。取り込みは
-  `cherry-pick`や`merge`など履歴を書き換えない方法を使う
-- `public/`以外（README.md, package.json, docs/など）のファイルを指示なく変更する
+- `public/`以外（README.md, package.json, docs/, CLAUDE.md自身など）のファイルを
+  指示なく変更する
 - ユーザーの確認なしにcommit・pushする
 - 外部API（コメントサーバー等）の仕様をUSAGE.mdで確認せず、推測で実装する
 - フレームワーク・ビルドツール・外部ライブラリの新規導入
