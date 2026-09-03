@@ -16,6 +16,7 @@ const centerFlash = document.querySelector(".video-center-flash");
 const centerFlashIconUse = document.getElementById("center-flash-icon-use");
 const fullscreenToggle = document.querySelector(".video-fullscreen-toggle");
 const fullscreenIconUse = document.getElementById("fullscreen-icon-use");
+const videoDanmakuLayer = document.querySelector(".video-danmaku-layer");
 
 // 読み込み中／エラーの状態表示を切り替える。nullなら状態表示自体を隠す。
 function setVideoStatus(mode) {
@@ -207,6 +208,39 @@ if (
     clearTimeout(controlsFadeTimer);
     if (!video.paused) videoPlayer.classList.remove("controls-visible");
   });
+}
+
+/**
+ * 全画面表示中のニコニコ動画風コメント
+ * サイドバーのコメント欄が見えなくなる全画面時だけ、届いたコメントを動画上に右から左へ流す。
+ */
+// 上下に重ならないよう、流すレーン（縦位置）を順番に割り当てる。
+const DANMAKU_LANE_COUNT = 10;
+let danmakuLaneIndex = 0;
+const prefersReducedMotion = window.matchMedia(
+  "(prefers-reduced-motion: reduce)",
+).matches;
+
+function spawnDanmakuComment(text) {
+  // 全画面時以外はサイドバーのコメント欄で十分見えているため、二重に流さない。
+  // reduced-motion環境ではCSS側でレイヤーごと非表示にしており、
+  // animationendが発火せず要素が残ってしまうため、ここで作らずに止める
+  if (!videoPlayer || !videoDanmakuLayer || !text || prefersReducedMotion) return;
+  if (document.fullscreenElement !== videoPlayer) return;
+
+  const span = document.createElement("span");
+  span.className = "video-danmaku-comment";
+  span.textContent = text;
+
+  const lane = danmakuLaneIndex % DANMAKU_LANE_COUNT;
+  danmakuLaneIndex += 1;
+  span.style.top = `${(lane / DANMAKU_LANE_COUNT) * 100}%`;
+
+  // 文字数が多いほど画面に出続けると邪魔になるため、短い時間で早く流し切る
+  span.style.animationDuration = `${Math.max(4, 9 - text.length / 8)}s`;
+
+  span.addEventListener("animationend", () => span.remove());
+  videoDanmakuLayer.appendChild(span);
 }
 
 /**
@@ -649,6 +683,7 @@ function addComment(text) {
   li.append(img, p);//liにimgとpを追加
 
   appendCommentItem(li);
+  spawnDanmakuComment(text);
 }
 
 /**
@@ -663,13 +698,15 @@ function addItem(iconUrl, name) {
   img.src = iconUrl;
   img.alt = name;
 
+  const caption = `${name}が送られました！`;
   const p = document.createElement("p");
   p.className = "comment-text";
-  p.textContent = `${name}が送られました！`;
+  p.textContent = caption;
 
   li.append(img, p);//liにimgとpを追加
 
   appendCommentItem(li);
+  spawnDanmakuComment(caption);
 }
 
 /**
@@ -696,4 +733,5 @@ function addItemWithComment(iconUrl, name, text) {
   li.append(img, p, caption);
 
   appendCommentItem(li);
+  spawnDanmakuComment(text);
 }
