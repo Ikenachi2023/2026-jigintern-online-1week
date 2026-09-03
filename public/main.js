@@ -336,19 +336,25 @@ const itemPagePrev = document.querySelector(".item-page-prev");
 const itemPageNext = document.querySelector(".item-page-next");
 const selectedItemChip = document.querySelector(".selected-item-chip");
 const selectedItemIcon = document.querySelector(".selected-item-icon");
-const selectedItemName = document.querySelector(".selected-item-name");
 const selectedItemRemove = document.querySelector(".selected-item-remove");
 
 // 選択中のアイテム（1件のみ）。未選択時はnull。
 let selectedItem = null;
 
 // 選択状態に合わせて、入力欄上のチップ表示を更新する。
+// アイテム名は表示せず、×ボタンのaria-labelにだけ含めてスクリーンリーダーに伝える。
 function renderSelectedItemChip() {
   if (!selectedItemChip) return;
   selectedItemChip.hidden = !selectedItem;
   if (!selectedItem) return;
   selectedItemIcon.src = selectedItem.iconUrl ?? "";
-  selectedItemName.textContent = selectedItem.name ?? "";
+  selectedItemIcon.alt = selectedItem.name ?? "";
+  if (selectedItemRemove) {
+    selectedItemRemove.setAttribute(
+      "aria-label",
+      `アイテムの選択を解除（${selectedItem.name ?? ""}）`,
+    );
+  }
 }
 
 // アイテム一覧側の選択表示（aria-pressed）をすべて解除する。
@@ -567,6 +573,18 @@ if (sendArea && commentInput && sendButton && sendError) {
     sendButton.classList.toggle("is-sending", isSending);
   }
 
+  const SEND_SUCCESS_DURATION = 1200; // チェックマーク表示後、この時間で通常表示に戻す
+  let sendSuccessTimeoutId = null;
+
+  // 送信成功時、ボタンのラベルを一瞬チェックマークに切り替える。
+  function showSendSuccess() {
+    clearTimeout(sendSuccessTimeoutId);
+    sendButton.classList.add("is-sent");
+    sendSuccessTimeoutId = setTimeout(() => {
+      sendButton.classList.remove("is-sent");
+    }, SEND_SUCCESS_DURATION);
+  }
+
   function showSendError(message) {
     sendError.textContent = message;
     sendError.hidden = false;
@@ -607,6 +625,7 @@ if (sendArea && commentInput && sendButton && sendError) {
     }
 
     setSending(false);
+    showSendSuccess();
 
     // 送信成功時のみ、入力欄・アイテム選択・アイテム一覧をリセットする。
     commentInput.value = "";
