@@ -14,6 +14,12 @@
 - コメントSSE/POST/アイテムAPI: `https://intern-comment-server.*.deno.net`
   （仕様は https://github.com/jigintern/intern-comment-server の USAGE.md 参照）
 
+## 複数セッション運用
+- 同時作業時は`git worktree add -b <branch> .claude/worktrees/<name>`で作業ディレクトリを
+  分けて衝突を避ける（`EnterWorktree`はこの環境ではエラーになるため手動で行う）
+- 作業ブランチで「ワークツリーやめる」「メインに戻る」等と言われたら、ローカルで
+  `main`にmerge・pushするのではなく、作業ブランチをpushしてGitHub上にPRを作成する
+
 ## コーディング方針
 - vanilla JS。`querySelector`で要素取得し、`if (el1 && el2 && ...)`で存在チェックしてから
   イベント登録するガード節パターンを徹底する
