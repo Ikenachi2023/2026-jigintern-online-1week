@@ -227,6 +227,59 @@ h1 {
   font-size: 0.8rem;
 }
 
+/* 選択中アイテムのチップ表示。1つだけ選択できる想定 */
+.selected-item-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--hibiscus);
+  border-radius: 16px;
+  background: #fff5f6;
+}
+
+.selected-item-chip[hidden] {
+  display: none;
+}
+
+.selected-item-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.selected-item-name {
+  font-size: 0.8rem;
+  color: #333;
+}
+
+.selected-item-remove {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #888;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.selected-item-remove:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--hibiscus);
+}
+
+/* アイテム一覧側で選択中のアイテムを示す */
+.item-button[aria-pressed="true"] {
+  border-color: var(--hibiscus);
+  background: #fff5f6;
+}
+
 .comment-input-row {
   display: flex;
   align-items: flex-end; /* 入力欄が伸びても他のボタンは下揃えのままにする */
@@ -272,12 +325,50 @@ h1 {
 }
 
 .send-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 6px 16px;
   border: none;
   border-radius: 16px;
   background: var(--hibiscus);
   color: #fff;
   cursor: pointer;
+}
+
+.send-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.send-button-spinner {
+  display: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+}
+
+/* 送信中はラベルを隠してスピナーを回す */
+.send-button.is-sending .send-button-label {
+  display: none;
+}
+
+.send-button.is-sending .send-button-spinner {
+  display: block;
+  animation: video-spinner-spin 0.8s linear infinite;
+}
+
+.send-error {
+  margin: 0;
+  color: var(--hibiscus);
+  font-size: 0.8rem;
+}
+
+.send-error[hidden] {
+  display: none;
 }
 
 .video-area {
