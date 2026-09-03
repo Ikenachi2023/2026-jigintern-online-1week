@@ -14,6 +14,12 @@
 - コメントSSE/POST/アイテムAPI: `https://intern-comment-server.*.deno.net`
   （仕様は https://github.com/jigintern/intern-comment-server の USAGE.md 参照）
 
+## 複数セッション運用
+- 同時作業時は`git worktree add -b <branch> .claude/worktrees/<name>`で作業ディレクトリを
+  分けて衝突を避ける（`EnterWorktree`はこの環境ではエラーになるため手動で行う）
+- 作業ブランチで「ワークツリーやめる」「メインに戻る」等と言われたら、ローカルで
+  `main`にmerge・pushするのではなく、作業ブランチをpushしてGitHub上にPRを作成する
+
 ## コーディング方針
 - vanilla JS。`querySelector`で要素取得し、`if (el1 && el2 && ...)`で存在チェックしてから
   イベント登録するガード節パターンを徹底する
@@ -26,10 +32,8 @@
 - ユーザーが書いたコメントは尊重し、削除する場合は許可を求める
 
 ## UI/UXの方針
-- 状態（ミュート中、送信中、選択中など）を視覚的に示す
-- 新しい操作導線（ボタンの追加など）は配置・ラベルで発見しやすくする
+- 具体的な見た目・演出の要望はCLAUDE.mdに書かず、セッションごとに伝える
 - アニメーション/フィードバックは`prefers-reduced-motion`に配慮する
-- アイテム（課金要素）の送信・受信にはアニメーションやカード表示などの演出を加える
 - UI/デザイン作業では`frontend-design`・`web-design-guidelines`スキルを使う
 
 ## 自動チェック
@@ -41,6 +45,10 @@
   差分編集（Edit）で変更する
 - `git reset --hard`, `git push --force`, `git clean`, `rm -rf`など、既存の変更を
   破壊する操作
+- `git rebase`など`main`を含む共有ブランチの履歴を書き換える操作。ユーザーは複数
+  セッションを同時起動しそれぞれ別ブランチで作業させることがあるため、rebaseで
+  他セッションのコミットを意図せずdropし消失させる事故が過去に起きている。取り込みは
+  `cherry-pick`や`merge`など履歴を書き換えない方法を使う
 - `public/`以外（README.md, package.json, docs/など）のファイルを指示なく変更する
 - ユーザーの確認なしにcommit・pushする
 - 外部API（コメントサーバー等）の仕様をUSAGE.mdで確認せず、推測で実装する
