@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start": "vite public"
+    "start": "vite public",
+    "check": "node --check public/main.js"
   },
   "devDependencies": {
     "vite": "^7.1.3"
