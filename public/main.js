@@ -363,6 +363,7 @@ const ITEMS_URL =
   "https://intern-comment-server.intern-comment-server.deno.net/items";
 const ITEMS_PER_PAGE = 5; // アイコン画像の通信量削減のため、一度に表示する件数を絞る
 const itemToggle = document.querySelector(".item-toggle");
+const itemToggleLabel = document.querySelector(".item-toggle-label");
 const itemPriceFilter = document.querySelector(".item-price-filter");
 const itemListRow = document.querySelector(".item-list-row");
 const itemList = document.querySelector(".item-list");
@@ -370,19 +371,25 @@ const itemPagePrev = document.querySelector(".item-page-prev");
 const itemPageNext = document.querySelector(".item-page-next");
 const selectedItemChip = document.querySelector(".selected-item-chip");
 const selectedItemIcon = document.querySelector(".selected-item-icon");
-const selectedItemName = document.querySelector(".selected-item-name");
 const selectedItemRemove = document.querySelector(".selected-item-remove");
 
 // 選択中のアイテム（1件のみ）。未選択時はnull。
 let selectedItem = null;
 
 // 選択状態に合わせて、入力欄上のチップ表示を更新する。
+// アイテム名は表示せず、×ボタンのaria-labelにだけ含めてスクリーンリーダーに伝える。
 function renderSelectedItemChip() {
   if (!selectedItemChip) return;
   selectedItemChip.hidden = !selectedItem;
   if (!selectedItem) return;
   selectedItemIcon.src = selectedItem.iconUrl ?? "";
-  selectedItemName.textContent = selectedItem.name ?? "";
+  selectedItemIcon.alt = selectedItem.name ?? "";
+  if (selectedItemRemove) {
+    selectedItemRemove.setAttribute(
+      "aria-label",
+      `アイテムの選択を解除（${selectedItem.name ?? ""}）`,
+    );
+  }
 }
 
 // アイテム一覧側の選択表示（aria-pressed）をすべて解除する。
@@ -413,11 +420,15 @@ if (
   itemPageNext
 ) {
   // 開閉ボタン：押すたびに一覧（絞り込みボタン＋アイテム）の表示・非表示を切り替える。
+  // 開いている間はラベルを「閉じる」に変え、押せば閉じられることが伝わるようにする。
   itemToggle.addEventListener("click", () => {
     const isExpanded = itemToggle.getAttribute("aria-expanded") === "true";
     itemToggle.setAttribute("aria-expanded", String(!isExpanded));
     itemPriceFilter.hidden = isExpanded; // 開いていたら隠す、隠れていたら表示する
     itemListRow.hidden = isExpanded;
+    if (itemToggleLabel) {
+      itemToggleLabel.textContent = isExpanded ? "アイテムを送る" : "閉じる";
+    }
   });
 
   // APIから取得した全アイテム。表示中の絞り込み・ページに応じて、この中から表示分だけをDOMに追加する。
@@ -425,25 +436,17 @@ if (
   let currentFilter = "all";
   let currentPage = 0;
 
-  // 値段データがAPIから届かないため、id文字列からダミーの値段を決定的に算出する。
-  // （同じidなら常に同じ値段になるようにする）
-  const DUMMY_PRICE_TIERS = [1000, 5000, 10000];
-  function dummyPrice(item) {
-    const id = item.id ?? item.name ?? "";
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = (hash * 31 + id.charCodeAt(i)) % DUMMY_PRICE_TIERS.length;
-    }
-    return DUMMY_PRICE_TIERS[hash];
-  }
-
-  // 絞り込み条件（すべて／1000円／5000円／10000円）に合うアイテムだけを返す。
+  // 絞り込み条件（すべて／プチギフト／ギフト／プレミアム）に合うアイテムだけを返す。
+  // costはAPIの実データをそのまま使う。プレミアムは上限を設けない開放区間にしており、
+  // 400円を超える金額（例: 500円）のアイテムが今後増えても、どれにも属さず
+  // 「すべて」でしか出てこなくなる抜け漏れが起きないようにしている。
   function filterItems(items, filter) {
-    if (filter === "low") return items.filter((item) => item.price === 1000);
-    if (filter === "mid") return items.filter((item) => item.price === 5000);
-    if (filter === "high")
-      return items.filter((item) => item.price === 10000);
-    return items;
+    if (filter === "low") return items.filter((item) => item.cost <= 150);
+    if (filter === "mid")
+      return items.filter((item) => item.cost > 150 && item.cost <= 400);
+    if (filter === "high") return items.filter((item) => item.cost > 400);
+    // 「すべて」は値段が高い順に並べ替える（APIの並び順はカテゴリ優先で値段順ではないため）。
+    return [...items].sort((a, b) => b.cost - a.cost);
   }
 
   // 1件分のアイテムを表示するボタン要素を作る（アイコン＋下に小さく名前・値段）。
@@ -480,9 +483,9 @@ if (
 
     const price = document.createElement("span");
     price.className = "item-button-price";
-    // 値段が算出できなかった場合は「価格不明」と表示する。
+    // costが取得できなかった場合は「価格不明」と表示する。
     price.textContent =
-      typeof item.price === "number" ? `${item.price}円` : "価格不明";
+      typeof item.cost === "number" ? `${item.cost}円` : "価格不明";
 
     button.append(img, name, price);
     return button;
@@ -549,11 +552,7 @@ if (
     fetch(ITEMS_URL)
       .then((response) => response.json())
       .then((data) => {
-        const items = data.items ?? [];
-        allItems = items.map((item) => ({
-          ...item,
-          price: dummyPrice(item),
-        }));
+        allItems = data.items ?? [];
         renderPage(currentPage);
       })
       .catch((error) => {
@@ -601,6 +600,18 @@ if (sendArea && commentInput && sendButton && sendError) {
     sendButton.classList.toggle("is-sending", isSending);
   }
 
+  const SEND_SUCCESS_DURATION = 1200; // チェックマーク表示後、この時間で通常表示に戻す
+  let sendSuccessTimeoutId = null;
+
+  // 送信成功時、ボタンのラベルを一瞬チェックマークに切り替える。
+  function showSendSuccess() {
+    clearTimeout(sendSuccessTimeoutId);
+    sendButton.classList.add("is-sent");
+    sendSuccessTimeoutId = setTimeout(() => {
+      sendButton.classList.remove("is-sent");
+    }, SEND_SUCCESS_DURATION);
+  }
+
   function showSendError(message) {
     sendError.textContent = message;
     sendError.hidden = false;
@@ -641,6 +652,7 @@ if (sendArea && commentInput && sendButton && sendError) {
     }
 
     setSending(false);
+    showSendSuccess();
 
     // 送信成功時のみ、入力欄・アイテム選択・アイテム一覧をリセットする。
     commentInput.value = "";
