@@ -209,6 +209,41 @@ const itemListRow = document.querySelector(".item-list-row");
 const itemList = document.querySelector(".item-list");
 const itemPagePrev = document.querySelector(".item-page-prev");
 const itemPageNext = document.querySelector(".item-page-next");
+const selectedItemChip = document.querySelector(".selected-item-chip");
+const selectedItemIcon = document.querySelector(".selected-item-icon");
+const selectedItemName = document.querySelector(".selected-item-name");
+const selectedItemRemove = document.querySelector(".selected-item-remove");
+
+// 選択中のアイテム（1件のみ）。未選択時はnull。
+let selectedItem = null;
+
+// 選択状態に合わせて、入力欄上のチップ表示を更新する。
+function renderSelectedItemChip() {
+  if (!selectedItemChip) return;
+  selectedItemChip.hidden = !selectedItem;
+  if (!selectedItem) return;
+  selectedItemIcon.src = selectedItem.iconUrl ?? "";
+  selectedItemName.textContent = selectedItem.name ?? "";
+}
+
+// アイテム一覧側の選択表示（aria-pressed）をすべて解除する。
+// チップの状態変数(selectedItem)とアイテムボタンのDOM表示は別物のため、両方合わせて戻す必要がある。
+function clearItemButtonSelection() {
+  document
+    .querySelectorAll(".item-button[aria-pressed='true']")
+    .forEach((button) => button.setAttribute("aria-pressed", "false"));
+}
+
+// アイテム選択を解除する（チップの×ボタン・送信完了時の両方から呼ぶ共通処理）。
+function deselectItem() {
+  selectedItem = null;
+  renderSelectedItemChip();
+  clearItemButtonSelection();
+}
+
+if (selectedItemRemove) {
+  selectedItemRemove.addEventListener("click", deselectItem);
+}
 
 if (
   itemToggle &&
@@ -257,6 +292,23 @@ if (
     const button = document.createElement("button");
     button.type = "button";
     button.className = "item-button";
+    button.setAttribute(
+      "aria-pressed",
+      String(selectedItem?.id === item.id),
+    );
+
+    // クリックするたびに選択/解除をトグルする（同時に選択できるアイテムは1つまで）。
+    button.addEventListener("click", () => {
+      const isSameItem = selectedItem?.id === item.id;
+      clearItemButtonSelection();
+      if (isSameItem) {
+        selectedItem = null;
+      } else {
+        selectedItem = item;
+        button.setAttribute("aria-pressed", "true");
+      }
+      renderSelectedItemChip();
+    });
 
     const img = document.createElement("img");
     img.className = "item-button-icon";
@@ -363,8 +415,10 @@ const COMMENT_POST_URL =
   "https://intern-comment-server.intern-comment-server.deno.net/messages";
 const sendArea = document.querySelector(".send-area");
 const commentInput = document.querySelector(".comment-input");
+const sendButton = document.querySelector(".send-button");
+const sendError = document.querySelector(".send-error");
 
-if (sendArea && commentInput) {
+if (sendArea && commentInput && sendButton && sendError) {
   // 入力内容の行数に合わせて高さを自動調整する。
   // CSS側で.comment-input-rowをflex-end揃えにしているため、高さが増えるとテキストエリアは下端を基準に上方向へ伸びる。
   const resizeCommentInput = () => {
@@ -382,27 +436,63 @@ if (sendArea && commentInput) {
     sendArea.requestSubmit(); // フォームのsubmitイベントを発火させる
   });
 
+  // 送信ボタンの見た目を「送信前／送信中」で切り替える。
+  function setSending(isSending) {
+    sendButton.disabled = isSending;
+    sendButton.classList.toggle("is-sending", isSending);
+  }
+
+  function showSendError(message) {
+    sendError.textContent = message;
+    sendError.hidden = false;
+  }
+
+  function hideSendError() {
+    sendError.hidden = true;
+  }
+
   sendArea.addEventListener("submit", async (event) => {
     event.preventDefault(); // フォームの通常送信（ページ再読み込み）を防ぐ。
     //これをしないとJavaScriptでの処理より先にページ遷移が起きる。
     //htmlのformはデフォルトで「今表示しているページ自身」に送信されるので、押すたびリロードされてしまう
 
-    const text = commentInput.value.trim();//前後の空白を除いたテキストを取得
-    if (!text) return;//空文字だった場合コメント送信しない
+    const text = commentInput.value.trim(); //前後の空白を除いたテキストを取得
+
+    // 送信内容を場合分けして組み立てる。
+    // ・コメントのみ：textだけ送る
+    // ・アイテムのみ：itemIdだけ送る
+    // ・両方同時：textとitemIdを両方送る（アイテムは1つまでしか選択できない）
+    // ・どちらもなければ送信しない
+    const body = {};
+    if (text) body.text = text;
+    if (selectedItem) body.itemId = selectedItem.id;
+    if (!body.text && !body.itemId) return;
+
+    hideSendError();
+    setSending(true);
 
     try {
       await fetch(COMMENT_POST_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" }, //jsonで送ることを伝えている
-        body: JSON.stringify({ text }), //JSオブジェクト{ text: "こんにちは" }をJSON文字列'{"text":"こんにちは"}'に変換
+        body: JSON.stringify(body),
       });
     } catch (error) {
-      console.error("コメントの送信に失敗しました", error);
+      console.error("送信に失敗しました", error);
+      showSendError("送信に失敗しました。もう一度お試しください。");
+      setSending(false);
       return;
     }
 
+    setSending(false);
+
+    // 送信成功時のみ、入力欄・アイテム選択・アイテム一覧をリセットする。
     commentInput.value = "";
     resizeCommentInput(); // 高さも1行分に戻す
+    deselectItem();
+    if (itemToggle && itemToggle.getAttribute("aria-expanded") === "true") {
+      itemToggle.click(); // 一覧を閉じる（開閉トグルの処理をそのまま流用する）
+    }
   });
 }
 
