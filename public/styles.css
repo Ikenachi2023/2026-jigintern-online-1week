@@ -145,10 +145,10 @@ h1 {
   gap: 4px;
   align-self: flex-start;
   padding: 4px 12px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--hibiscus);
   border-radius: 16px;
-  background: #fff;
-  color: #555;
+  background: var(--hibiscus);
+  color: #fff;
   font-size: 0.85rem;
   cursor: pointer;
 }
@@ -158,16 +158,37 @@ h1 {
   height: 14px;
 }
 
+/* 開閉状態を示すシェブロン。開いている間は上向きに反転させ、押せば閉じられることを示す */
+.item-toggle-chevron {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.15s ease;
+}
+
+.item-toggle[aria-expanded="true"] .item-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-toggle-chevron {
+    transition: none;
+  }
+}
+
 .item-toggle:hover {
+  background: #d81228; /* 塗りつぶし状態でもホバーと分かるよう少し濃くする */
+  border-color: #d81228;
+}
+
+/* 開いている間（＝「閉じる」表示）は白背景にして、閉じられる状態だと分かるようにする */
+.item-toggle[aria-expanded="true"] {
+  background: #fff;
   border-color: var(--hibiscus);
   color: var(--hibiscus);
 }
 
-/* 開いている間は塗りつぶして、ホバー時の枠線色だけの状態とはっきり区別する */
-.item-toggle[aria-expanded="true"] {
-  background: var(--hibiscus);
-  border-color: var(--hibiscus);
-  color: #fff;
+.item-toggle[aria-expanded="true"]:hover {
+  background: #fff5f6;
 }
 
 .item-price-filter {
@@ -214,6 +235,9 @@ h1 {
   display: flex;
   gap: 12px;
   overflow: hidden; /* 1ページ分（5件）だけが見えるようにする */
+  /* 絞り込みでアイテムが5件未満になっても、ボタン5個分の幅を常に確保して
+     フィルタ切り替えのたびにパネル幅がガタつかないようにする */
+  min-width: calc(4rem * 5 + 12px * 4);
 }
 
 .item-page-button {
@@ -242,8 +266,11 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: space-between; /* 名前の行数が変わってもアイコンは上・値段は下で揃う */
   gap: 2px;
   width: 4rem;
+  height: 7rem; /* 名前が長くてもカードの高さが変わらないようにする */
+  flex-shrink: 0;
   border: 1px solid #ccc;
   border-radius: 8px;
   background: #fff;
@@ -266,6 +293,11 @@ h1 {
   color: #555;
   text-align: center;
   word-break: break-word;
+  /* 20文字程度の長い名前でも高さが変わらないよう、3行を超える分は...で省略する */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .item-button-price {
