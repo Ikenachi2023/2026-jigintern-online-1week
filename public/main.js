@@ -397,25 +397,17 @@ if (
   let currentFilter = "all";
   let currentPage = 0;
 
-  // 値段データがAPIから届かないため、id文字列からダミーの値段を決定的に算出する。
-  // （同じidなら常に同じ値段になるようにする）
-  const DUMMY_PRICE_TIERS = [1000, 5000, 10000];
-  function dummyPrice(item) {
-    const id = item.id ?? item.name ?? "";
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = (hash * 31 + id.charCodeAt(i)) % DUMMY_PRICE_TIERS.length;
-    }
-    return DUMMY_PRICE_TIERS[hash];
-  }
-
-  // 絞り込み条件（すべて／1000円／5000円／10000円）に合うアイテムだけを返す。
+  // 絞り込み条件（すべて／プチギフト／ギフト／プレミアム）に合うアイテムだけを返す。
+  // costはAPIの実データをそのまま使う。プレミアムは上限を設けない開放区間にしており、
+  // 400円を超える金額（例: 500円）のアイテムが今後増えても、どれにも属さず
+  // 「すべて」でしか出てこなくなる抜け漏れが起きないようにしている。
   function filterItems(items, filter) {
-    if (filter === "low") return items.filter((item) => item.price === 1000);
-    if (filter === "mid") return items.filter((item) => item.price === 5000);
-    if (filter === "high")
-      return items.filter((item) => item.price === 10000);
-    return items;
+    if (filter === "low") return items.filter((item) => item.cost <= 150);
+    if (filter === "mid")
+      return items.filter((item) => item.cost > 150 && item.cost <= 400);
+    if (filter === "high") return items.filter((item) => item.cost > 400);
+    // 「すべて」は値段が高い順に並べ替える（APIの並び順はカテゴリ優先で値段順ではないため）。
+    return [...items].sort((a, b) => b.cost - a.cost);
   }
 
   // 1件分のアイテムを表示するボタン要素を作る（アイコン＋下に小さく名前・値段）。
@@ -452,9 +444,9 @@ if (
 
     const price = document.createElement("span");
     price.className = "item-button-price";
-    // 値段が算出できなかった場合は「価格不明」と表示する。
+    // costが取得できなかった場合は「価格不明」と表示する。
     price.textContent =
-      typeof item.price === "number" ? `${item.price}円` : "価格不明";
+      typeof item.cost === "number" ? `${item.cost}円` : "価格不明";
 
     button.append(img, name, price);
     return button;
@@ -521,11 +513,7 @@ if (
     fetch(ITEMS_URL)
       .then((response) => response.json())
       .then((data) => {
-        const items = data.items ?? [];
-        allItems = items.map((item) => ({
-          ...item,
-          price: dummyPrice(item),
-        }));
+        allItems = data.items ?? [];
         renderPage(currentPage);
       })
       .catch((error) => {
