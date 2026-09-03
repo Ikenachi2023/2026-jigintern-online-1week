@@ -185,13 +185,19 @@ if (commentArea) {
     }
     if (!payload) return;
 
-    // text プロパティがあれば「コメント」として表示する。
-    if (payload.text) {
+    // textとitemの両方があれば「コメント付きアイテム」として1つにまとめて表示する。
+    if (payload.text && payload.item) {
+      addItemWithComment(
+        payload.item.iconUrl ?? "", //Null合体演算子：左側の値が null または undefined のときだけ、右側の値を代わりに使います
+        payload.item.name ?? "",
+        payload.text,
+      );
+    } else if (payload.text) {
+      // text プロパティのみあれば「コメント」として表示する。
       addComment(payload.text);
-    }
-    // item プロパティがあれば「アイテム」として表示する。
-    if (payload.item) {
-      addItem(payload.item.iconUrl ?? "", payload.item.name ?? ""); //Null合体演算子：左側の値が null または undefined のときだけ、右側の値を代わりに使います
+    } else if (payload.item) {
+      // item プロパティのみあれば「アイテム」として表示する。
+      addItem(payload.item.iconUrl ?? "", payload.item.name ?? "");
     }
   };
 }
@@ -458,11 +464,8 @@ if (sendArea && commentInput && sendButton && sendError) {
 
     const text = commentInput.value.trim(); //前後の空白を除いたテキストを取得
 
-    // 送信内容を場合分けして組み立てる。
-    // ・コメントのみ：textだけ送る
-    // ・アイテムのみ：itemIdだけ送る
-    // ・両方同時：textとitemIdを両方送る（アイテムは1つまでしか選択できない）
-    // ・どちらもなければ送信しない
+    // bodyを作り、要素として追加していく
+    //両方空なら送信しない
     const body = {};
     if (text) body.text = text;
     if (selectedItem) body.itemId = selectedItem.id;
@@ -544,4 +547,34 @@ function addItem(iconUrl, name) {
 
   // 新しい行が増えたら一番下（最新）が見えるようにスクロールする。
   commentArea.scrollTop = commentArea.scrollHeight;//スクロールの高さ分、スクロールする
+}
+
+/**
+ * コメント付きで届いたアイテムを画面に追加する。
+ * アイコンの大きさはaddItemと同じまま、実際のコメント本文を主役にして表示する。
+ */
+function addItemWithComment(iconUrl, name, text) {
+  const li = document.createElement("li");
+  li.className = "comment-item item-comment item-comment-message";
+
+  const img = document.createElement("img");
+  img.className = "item-icon";
+  img.src = iconUrl;
+  img.alt = name;
+
+  const p = document.createElement("p");
+  p.className = "comment-text";
+  p.textContent = text;
+
+  const caption = document.createElement("p");
+  caption.className = "item-comment-caption";
+  caption.textContent = `${name}が送られました！`;
+
+  li.append(img, p, caption);
+
+  commentArea.appendChild(li);
+  trimComments(); // 上限件数を超えたら古いコメントから削除する
+
+  // 新しい行が増えたら一番下（最新）が見えるようにスクロールする。
+  commentArea.scrollTop = commentArea.scrollHeight;
 }
