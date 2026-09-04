@@ -95,24 +95,30 @@ h1 {
      .comment-area(overflow-y:auto)が溢れた際にこのカードだけ潰れて縮んでしまうため、
      他のコメント同様に縮まないよう明示する */
   flex-shrink: 0;
-  border-color: #ffb0ba;
-  /* cubic-bezierでわずかにオーバーシュートさせ、ギフトが弾んで届いたような入場にする */
-  animation: item-comment-pop-featured 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* 通常アイテム（ピンク系）と混同しないよう、ここだけゴールド系の配色にする */
+  border-color: #e8b04a;
+  background: linear-gradient(180deg, #fffaf0 0%, #ffedbd 100%);
+  /* cubic-bezierでわずかにオーバーシュートさせ、ギフトが弾んで届いたような入場にする。
+     枠の外側にはリング状の波紋（box-shadowのping演出）を同時に走らせる */
+  animation:
+    item-comment-pop-featured 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    item-comment-ring 0.9s ease-out both;
 }
 
-/* カードが着地した直後、光が斜めに一度だけ走る合図。通常アイテムとの差別化ポイントはこれ1つに絞る */
+/* カードが着地した直後、光が斜めに一度だけ走る合図。通常アイテムとの差別化ポイントはこれ1つに絞る。
+   ゴールド背景に対してもはっきり「きらっ」と分かるよう、帯を太く・より白く強調する */
 .item-comment-featured::after {
   content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(
     115deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.85) 50%,
-    transparent 60%
+    transparent 30%,
+    rgba(255, 255, 255, 0.95) 50%,
+    transparent 70%
   );
   transform: translateX(-120%);
-  animation: item-comment-shine 0.9s ease-out 0.15s both;
+  animation: item-comment-shine 0.7s ease-out 0.15s both;
   pointer-events: none;
 }
 
@@ -123,7 +129,22 @@ h1 {
 }
 
 .item-comment-featured .item-icon {
+  position: relative; /* ::beforeの光の輪をアイコン中心に重ねる基準にする */
   animation: item-icon-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s both;
+}
+
+/* アイコンの背後から一度だけ光が弾けて広がる合図。着地の勢いを視覚的に補強する */
+.item-comment-featured .item-icon::before {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(232, 176, 74, 0.4) 0%,
+    rgba(232, 176, 74, 0) 70%
+  );
+  animation: item-icon-burst 0.6s ease-out 0.05s both;
 }
 
 .item-comment .comment-text {
@@ -185,11 +206,40 @@ h1 {
   }
 }
 
+/* カード外周に一瞬だけ広がって消える波紋（box-shadowのping演出） */
+@keyframes item-comment-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(232, 176, 74, 0.5);
+  }
+  40% {
+    box-shadow: 0 0 0 6px rgba(232, 176, 74, 0.14);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(232, 176, 74, 0);
+  }
+}
+
+/* アイコン背後から一度だけ広がって消える光の輪 */
+@keyframes item-icon-burst {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  40% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .item-comment,
   .item-comment-featured,
   .item-comment-featured::after,
-  .item-comment-featured .item-icon {
+  .item-comment-featured .item-icon,
+  .item-comment-featured .item-icon::before {
     animation: none;
   }
 }
