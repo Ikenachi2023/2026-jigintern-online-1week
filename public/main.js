@@ -253,8 +253,19 @@ if (
     centerFlash.classList.add("is-flashing");
   }
 
+  // 一時停止中にバッファが古くなっている（≒配信に追いつけていない）ことがあるため、
+  // 再生を再開するときは常にライブエッジまで進めてから再生する。
+  function seekToLiveEdge() {
+    if (hlsInstance && hlsInstance.liveSyncPosition != null) {
+      video.currentTime = hlsInstance.liveSyncPosition;
+    } else if (video.seekable.length > 0) {
+      video.currentTime = video.seekable.end(video.seekable.length - 1);
+    }
+  }
+
   function togglePlay() {
     if (video.paused) {
+      seekToLiveEdge();
       video.play();
       flashCenterIcon("#icon-play");
     } else {
