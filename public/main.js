@@ -17,6 +17,8 @@ const centerFlashIconUse = document.getElementById("center-flash-icon-use");
 const fullscreenToggle = document.querySelector(".video-fullscreen-toggle");
 const fullscreenIconUse = document.getElementById("fullscreen-icon-use");
 const videoDanmakuLayer = document.querySelector(".video-danmaku-layer");
+const commentToggle = document.querySelector(".video-comment-toggle");
+const commentIconUse = document.getElementById("comment-icon-use");
 
 // 読み込み中／エラーの状態表示を切り替える。nullなら状態表示自体を隠す。
 function setVideoStatus(mode) {
@@ -193,7 +195,13 @@ if (
     if (!isFullscreen && videoDanmakuLayer) {
       videoDanmakuLayer.replaceChildren();
     }
+    // オン/オフボタンは全画面中の演出にしか意味が無いため、全画面以外では隠す
+    if (commentToggle) commentToggle.hidden = !isFullscreen;
   });
+
+  if (commentToggle && commentIconUse) {
+    commentToggle.addEventListener("click", () => setDanmakuHidden(!danmakuHidden));
+  }
 
   // マウス操作があった間だけコントロールバーを表示し、無操作が続いたらフェードアウトする。
   const CONTROLS_FADE_DELAY = 2500;
@@ -233,12 +241,30 @@ function nextDanmakuLaneTop() {
   return `${(lane / DANMAKU_LANE_COUNT) * 100}%`;
 }
 
+// コントロールバーのボタンで、全画面中に流れるコメント演出だけを止められるようにする
+// フラグ。サイドバーのコメント欄自体は消さない（あくまで動画上のオーバーレイだけ）。
+let danmakuHidden = false;
+
+// アイコン・aria属性をまとめて更新する。呼び出し元ごとに更新箇所が漏れないよう1箇所に集約する。
+function setDanmakuHidden(hidden) {
+  danmakuHidden = hidden;
+  if (commentIconUse) {
+    commentIconUse.setAttribute("href", hidden ? "#icon-comment-off" : "#icon-comment");
+  }
+  if (commentToggle) {
+    commentToggle.setAttribute("aria-pressed", String(hidden));
+    commentToggle.setAttribute("aria-label", hidden ? "コメント表示オン" : "コメント表示オフ");
+  }
+  // オフにした瞬間、既に流れているコメントも消す（オフのはずなのに古い分だけ流れ続けるのは不自然）
+  if (hidden && videoDanmakuLayer) videoDanmakuLayer.replaceChildren();
+}
+
 // 全画面判定とreduced-motion判定は3種類のdanmaku（コメント・アイテム・コメント付き
 // アイテム）で共通なので、ここにまとめて呼び出し側の条件分岐を減らす。
 function canSpawnDanmaku() {
   // reduced-motion環境ではCSS側でレイヤーごと非表示にしており、
   // animationendが発火せず要素が残ってしまうため、ここで作らずに止める
-  if (!videoPlayer || !videoDanmakuLayer || prefersReducedMotion) return false;
+  if (!videoPlayer || !videoDanmakuLayer || prefersReducedMotion || danmakuHidden) return false;
   // 全画面時以外はサイドバーのコメント欄で十分見えているため、二重に流さない。
   return document.fullscreenElement === videoPlayer;
 }
