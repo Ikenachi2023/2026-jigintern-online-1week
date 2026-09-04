@@ -17,6 +17,7 @@ const centerFlashIconUse = document.getElementById("center-flash-icon-use");
 const fullscreenToggle = document.querySelector(".video-fullscreen-toggle");
 const fullscreenIconUse = document.getElementById("fullscreen-icon-use");
 const videoDanmakuLayer = document.querySelector(".video-danmaku-layer");
+const videoItemEffectLayer = document.querySelector(".video-item-effect-layer");
 
 // 読み込み中／エラーの状態表示を切り替える。nullなら状態表示自体を隠す。
 function setVideoStatus(mode) {
@@ -241,6 +242,61 @@ function spawnDanmakuComment(text) {
 }
 
 /**
+ * 動画上のアイテムアニメーション（LIVEバッジの下）
+ * animationUrlを持つアイテムが届いたときだけ、その画像を動画上に一定時間表示する。
+ * 複数同時に届いても重ねて表示すると視認しづらいため、キューに積んで1つずつ順番に出す。
+ */
+const ITEM_EFFECT_DISPLAY_MS = 5200; // アニメーションwebpがループする間、視認できる程度の表示時間
+let itemEffectQueue = [];
+let isItemEffectPlaying = false;
+
+function playNextItemEffect() {
+  if (isItemEffectPlaying || itemEffectQueue.length === 0) return;
+  if (!videoItemEffectLayer) return;
+
+  const { animationUrl, name } = itemEffectQueue.shift();
+  isItemEffectPlaying = true;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "video-item-effect";
+
+  const img = document.createElement("img");
+  img.className = "video-item-effect-icon";
+  img.src = animationUrl;
+  img.alt = "";
+
+  // 名前は最大20文字あるため、アイコン幅より少し広く取って折り返して表示する
+  const label = document.createElement("p");
+  label.className = "video-item-effect-label";
+  label.textContent = `${name}が送られました！`;
+
+  wrapper.append(img, label);
+
+  // animationendとフォールバックのタイマーが両方発火しうるため、二重実行を防ぐ
+  let finished = false;
+  function finish() {
+    if (finished) return;
+    finished = true;
+    wrapper.remove();
+    isItemEffectPlaying = false;
+    playNextItemEffect(); // キューに残りがあれば続けて出す
+  }
+
+  // reduced-motion環境ではCSS側でフェードアニメーション自体を付けないため、
+  // animationendが発火せずキューが詰まる。タイマーで一定時間後に必ず片付ける。
+  wrapper.addEventListener("animationend", finish);
+  setTimeout(finish, ITEM_EFFECT_DISPLAY_MS + 300);
+
+  videoItemEffectLayer.appendChild(wrapper);
+}
+
+function spawnItemEffect(animationUrl, name) {
+  if (!videoItemEffectLayer || !animationUrl) return;
+  itemEffectQueue.push({ animationUrl, name });
+  playNextItemEffect();
+}
+
+/**
  * コメント受信（SSE）
  * サーバーからのイベントを受け取り、コメント・アイテムを画面に追加する。
  */
@@ -335,8 +391,22 @@ if (commentArea) {
     }
     if (!payload) return;
 
-    // textとitemの両方があれば「コメント付きアイテム」として1つにまとめて表示する。
-    if (payload.text && payload.item) {
+    // animationUrlを持つアイテムは動画上でも演出するが、コメント欄側のアイテム情報自体は消さず、
+    // 通常アイテムと区別が付くようitem-comment-featured付きのカードで表示する。
+    if (payload.item?.animationUrl) {
+      spawnItemEffect(payload.item.animationUrl, payload.item.name ?? "");
+      if (payload.text) {
+        addItemWithComment(
+          payload.item.iconUrl ?? "",
+          payload.item.name ?? "",
+          payload.text,
+          true,
+        );
+      } else {
+        addItem(payload.item.iconUrl ?? "", payload.item.name ?? "", true);
+      }
+    } else if (payload.text && payload.item) {
+      // textとitemの両方があれば「コメント付きアイテム」として1つにまとめて表示する。
       addItemWithComment(
         payload.item.iconUrl ?? "",
         payload.item.name ?? "",
@@ -683,10 +753,13 @@ function addComment(text) {
 
 /**
  * アイテム（コメント2行分の大きさで画像を表示し、その下にコメント1行分で名前を表示）を画面に追加する。
+ * isFeatured: animationUrlを持つアイテム（＝動画上にも演出が出る）かどうか。
+ * 通常アイテムと見た目を区別するため、カードにitem-comment-featuredクラスを足す。
  */
-function addItem(iconUrl, name) {
+function addItem(iconUrl, name, isFeatured = false) {
   const li = document.createElement("li");
   li.className = "comment-item item-comment";
+  if (isFeatured) li.classList.add("item-comment-featured");
 
   const img = document.createElement("img");
   img.className = "item-icon";
@@ -706,10 +779,13 @@ function addItem(iconUrl, name) {
 
 /**
  * コメント付きで届いたアイテムを画面に追加する。
+ * isFeatured: animationUrlを持つアイテム（＝動画上にも演出が出る）かどうか。
+ * 通常アイテムと見た目を区別するため、カードにitem-comment-featuredクラスを足す。
  */
-function addItemWithComment(iconUrl, name, text) {
+function addItemWithComment(iconUrl, name, text, isFeatured = false) {
   const li = document.createElement("li");
   li.className = "comment-item item-comment item-comment-message";
+  if (isFeatured) li.classList.add("item-comment-featured");
 
   const img = document.createElement("img");
   img.className = "item-icon";
