@@ -1156,27 +1156,292 @@ body {
 }
 
 .video-meta {
+  position: relative; /* video-meta-paneを絶対配置するための基準 */
   flex: 1;
   border: 1px solid #ccc;
   border-radius: 8px;
-  padding: 12px 16px;
-  overflow-y: auto;
   /* overflow-yがvisible以外だとflexアイテムの自動最小サイズが0扱いになり、
      動画エリアの高さが足りないとタイトル/説明が完全に潰れてしまうため、
      最低限タイトル1行＋説明1行が読める高さを確保する */
   min-height: 5rem;
+  /* 2枚のpaneを横にスライドさせるため、はみ出た側を隠す */
+  overflow: hidden;
+}
+
+/* タイトル情報／配信一覧の2枚。video-metaの領域いっぱいに重ねて置き、
+   transformで左右にスライドさせることでスライドショー的に切り替える。
+   paddingはvideo-meta側ではなくここに持たせる（絶対配置だとparentのpaddingが効かないため）。 */
+.video-meta-pane {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  overflow-y: auto;
+  transition: transform 0.3s ease;
+}
+
+.video-meta-info {
+  transform: translateX(0);
+}
+
+.video-meta-channels {
+  transform: translateX(100%);
+}
+
+.video-meta[data-view="channels"] .video-meta-info {
+  transform: translateX(-100%);
+}
+
+.video-meta[data-view="channels"] .video-meta-channels {
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-meta-pane {
+    transition: none;
+  }
+}
+
+.video-category {
+  margin: 0 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hibiscus);
 }
 
 .video-title {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 1.1rem;
   border-left: 4px solid var(--hibiscus);
   padding-left: 8px;
 }
 
-.video-description {
+.video-title-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 行として高さを取らせず、タイトルと出典情報の間の高さに重ねて置く */
+.video-channel-list-toggle {
+  position: absolute;
+  top: 34px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: #999;
+  font: inherit;
+  cursor: pointer;
+}
+
+.video-channel-list-toggle:hover,
+.video-channel-list-toggle:focus-visible {
+  border-color: var(--hibiscus);
+  color: var(--hibiscus);
+}
+
+.video-title-cta-label {
+  font-size: 0.75rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* シェブロン3枚が、枠内を左から右へスライドしながら流れていくことで
+   ">>>"が右へ動いていく様子を表現する。枠からはみ出た分はoverflow:hiddenで隠す */
+.video-title-cta-chevrons {
+  position: relative;
+  width: 1.8em;
+  height: 1em;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.video-title-cta-chevrons svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1em;
+  height: 1em;
+  opacity: 0;
+  animation: video-title-cta-slide 1.2s ease-in-out infinite;
+}
+
+.video-title-cta-chevrons svg:nth-child(1) {
+  animation-delay: 0s;
+}
+.video-title-cta-chevrons svg:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.video-title-cta-chevrons svg:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes video-title-cta-slide {
+  0% {
+    opacity: 0;
+    transform: translateX(-60%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(20%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-title-cta-chevrons svg {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 配信一覧paneの先頭にある「戻る」導線。タイトル情報paneへスライドで戻す */
+.channel-list-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #999;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.channel-list-back:hover,
+.channel-list-back:focus-visible {
+  color: var(--hibiscus);
+}
+
+.channel-list-back-icon {
+  width: 14px;
+  height: 14px;
+  transform: rotate(180deg); /* 右向きシェブロンを反転させ「戻る」を表す */
+}
+
+.channel-list-heading {
+  margin: 0 0 6px;
+  padding: 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #999;
+}
+
+.channel-list {
   margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.channel-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #333;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-list-item:hover,
+.channel-list-item:focus-visible {
+  background: #ffedef;
+}
+
+.channel-list-item[aria-current="true"] {
+  color: var(--hibiscus);
+  font-weight: 700;
+}
+
+.channel-list-item-category {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #999;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.channel-list-item-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--hibiscus);
+}
+
+/* 提供・ライセンス・出典を、映画のエンドクレジット風に横並びで見せる。
+   各項目はdt(ラベル)を小さく添えるだけにして、値そのものを主役にする。 */
+.video-credits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.video-credit {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.video-credit dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: #999;
+}
+
+.video-credit dd {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #333;
+}
+
+/* CCライセンス表記はオープンな配布条件そのものが作品の個性なので、
+   本文と区別できるスタンプ風のバッジにして目に留まるようにする。 */
+.video-credit-license dd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--hibiscus);
+  border: 1px solid var(--hibiscus);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.video-credit-source a {
+  font-size: 0.85rem;
   color: #555;
+  text-decoration-color: #ccc;
+}
+
+.video-credit-source a:hover,
+.video-credit-source a:focus-visible {
+  color: var(--hibiscus);
+  text-decoration-color: var(--hibiscus);
 }
 
 .sidebar {

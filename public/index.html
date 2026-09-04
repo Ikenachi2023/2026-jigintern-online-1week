@@ -114,6 +114,16 @@
           stroke-linejoin="round"
         />
       </symbol>
+      <symbol id="icon-chevron-right" viewBox="0 0 24 24">
+        <path
+          d="M9 6l6 6-6 6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </symbol>
       <symbol id="icon-tag" viewBox="0 0 24 24">
         <path
           d="M11 4H6a2 2 0 0 0-2 2v5l9.5 9.5a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8L11 4z"
@@ -250,9 +260,53 @@
             </button>
           </div>
         </div>
-        <div class="video-meta">
-          <h2 class="video-title">動画タイトル</h2>
-          <p class="video-description">動画の説明文がここに表示されます。</p>
+        <!-- タイトル情報 と 配信一覧 の2枚をスライドさせて切り替える。
+             main.jsがdata-view属性で表示中の面を切り替える -->
+        <div class="video-meta" data-view="info">
+          <div class="video-meta-pane video-meta-info">
+            <!-- カテゴリ・タイトル・出典情報はmain.jsがchannels.jsonから取得して差し込む -->
+            <p class="video-category"></p>
+            <h2 class="video-title"><span class="video-title-text"></span></h2>
+            <!-- 行として場所を取らせず、タイトルと出典情報の間の高さに重ねて配置する -->
+            <button
+              type="button"
+              class="video-channel-list-toggle"
+              aria-expanded="false"
+              aria-controls="channel-list-panel"
+            >
+              <span class="video-title-cta-label">他の配信を見る</span>
+              <span class="video-title-cta-chevrons" aria-hidden="true">
+                <svg><use href="#icon-chevron-right"></use></svg>
+                <svg><use href="#icon-chevron-right"></use></svg>
+                <svg><use href="#icon-chevron-right"></use></svg>
+              </span>
+            </button>
+            <dl class="video-credits">
+              <div class="video-credit video-credit-attribution">
+                <dt>提供</dt>
+                <dd></dd>
+              </div>
+              <div class="video-credit video-credit-license">
+                <dt>ライセンス</dt>
+                <dd></dd>
+              </div>
+              <div class="video-credit video-credit-source">
+                <dt>出典</dt>
+                <dd><a target="_blank" rel="noopener noreferrer"></a></dd>
+              </div>
+            </dl>
+          </div>
+          <!-- 他の配信の一覧。今回は表示のみで、クリックしても再生は切り替わらない -->
+          <div class="video-meta-pane video-meta-channels" id="channel-list-panel" inert>
+            <button type="button" class="channel-list-back">
+              <svg class="channel-list-back-icon" aria-hidden="true">
+                <use href="#icon-chevron-right"></use>
+              </svg>
+              <span>戻る</span>
+            </button>
+            <p class="channel-list-heading">配信一覧</p>
+            <ul class="channel-list"></ul>
+          </div>
         </div>
       </div>
       <div class="sidebar">

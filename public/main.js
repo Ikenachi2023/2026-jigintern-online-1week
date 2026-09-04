@@ -1,7 +1,10 @@
 /**
  * 動画プレイヤー（HLS再生）
  */
-const STREAM_URL = "https://intern-hls-server.tdmi0e341.workers.dev/stream.m3u8";
+// サーバーが複数チャンネル配信に対応したため、チャンネル一覧取得・個別プレイリスト取得の
+// 両方でホストを共通化できるよう、ベースURLとして切り出しておく。
+const HLS_BASE_URL = "https://intern-hls-server.tomaton.workers.dev";
+const STREAM_URL = `${HLS_BASE_URL}/stream.m3u8`;
 const video = document.getElementById("video");
 const videoPlayer = document.querySelector(".video-player");
 const videoStatus = document.querySelector(".video-status");
@@ -32,22 +35,38 @@ function setVideoStatus(mode) {
   videoStatus.dataset.mode = mode;
 }
 
+// チャンネル切り替え時に他チャンネルのプレイリストを読み直せるよう、
+// hls.jsインスタンス／ネイティブ再生かどうかを外から参照できるようにしておく。
+let hlsInstance = null;
+let useNativeHls = false;
+
+// 指定したプレイリストURLに切り替えて再生する。初回再生・チャンネル切り替えの両方で使う。
+function playStream(url) {
+  setVideoStatus("loading");
+  if (hlsInstance) {
+    hlsInstance.loadSource(url);
+  } else if (useNativeHls) {
+    video.src = url;
+  }
+}
+
 if (video) {
   setVideoStatus("loading");
 
   if (window.Hls && Hls.isSupported()) {
-    const hls = new Hls({ capLevelToPlayerSize: true });
-    hls.loadSource(STREAM_URL);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    hlsInstance = new Hls({ capLevelToPlayerSize: true });
+    hlsInstance.loadSource(STREAM_URL);
+    hlsInstance.attachMedia(video);
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
       // autoplay属性だけでは再生されない環境があるため、明示的に呼ぶ（失敗は無視してよい）
       video.play().catch(() => {});
     });
-    hls.on(Hls.Events.ERROR, (_event, data) => {
+    hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
       if (data.fatal) setVideoStatus("error");
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     // hls.jsが使えない環境（Safariなど）では、ブラウザネイティブのHLS再生にフォールバックする。
+    useNativeHls = true;
     video.src = STREAM_URL;
     video.addEventListener("loadedmetadata", () => {
       video.play().catch(() => {});
@@ -58,6 +77,157 @@ if (video) {
   // 再生が始まったら状態表示を消し、バッファリングで止まったら読み込み中に戻す。
   video.addEventListener("playing", () => setVideoStatus(null));
   video.addEventListener("waiting", () => setVideoStatus("loading"));
+}
+
+/**
+ * 配信チャンネル情報の表示・配信一覧・チャンネル切り替え
+ * channels.jsonを取得し、現在の配信情報の表示と、配信一覧からの再生切り替えを行う。
+ */
+const CHANNELS_URL = `${HLS_BASE_URL}/channels.json`;
+const videoMetaEl = document.querySelector(".video-meta");
+const videoMetaInfoEl = document.querySelector(".video-meta-info");
+const videoCategoryEl = document.querySelector(".video-category");
+const channelListToggle = document.querySelector(".video-channel-list-toggle");
+const channelListBackButton = document.querySelector(".channel-list-back");
+const videoTitleTextEl = document.querySelector(".video-title-text");
+const attributionEl = document.querySelector(".video-credit-attribution dd");
+const licenseEl = document.querySelector(".video-credit-license dd");
+const sourceEl = document.querySelector(".video-credit-source dd a");
+const videoCreditEls = document.querySelectorAll(".video-credit");
+const channelListPanel = document.querySelector("#channel-list-panel");
+const channelListEl = document.querySelector(".channel-list");
+
+// 一覧のチェックマーク更新・切り替え先探索のため、取得したチャンネル一覧と
+// 現在再生中のチャンネルIDを覚えておく。
+let allChannels = [];
+let currentChannelId = null;
+
+// タイトル情報／配信一覧をスライドで切り替える。表示していない方はinertにして、
+// キーボード操作やスクリーンリーダーが画面外の要素に迷い込まないようにする。
+function setChannelListView(showChannels) {
+  if (!videoMetaEl) return;
+  videoMetaEl.dataset.view = showChannels ? "channels" : "info";
+  if (channelListToggle) channelListToggle.setAttribute("aria-expanded", String(showChannels));
+  if (videoMetaInfoEl) videoMetaInfoEl.inert = showChannels;
+  if (channelListPanel) channelListPanel.inert = !showChannels;
+}
+
+// channels.jsonの項目は無い場合もあるため、値が無い項目（dtとddの組）ごと隠す。
+function setCredit(el, value) {
+  const row = el.closest(".video-credit");
+  if (!row) return;
+  if (!value) {
+    row.hidden = true;
+    return;
+  }
+  row.hidden = false;
+  if (el.tagName === "A") {
+    el.href = value;
+    el.textContent = value.replace(/^https?:\/\//, "");
+  } else {
+    el.textContent = value;
+  }
+}
+
+// タイトル情報pane（カテゴリ・タイトル・出典情報）を指定チャンネルの内容に差し替える。
+function renderChannelInfo(channel) {
+  videoCategoryEl.textContent = channel.category ?? "";
+  videoTitleTextEl.textContent = channel.title ?? "";
+  setCredit(attributionEl, channel.attribution);
+  setCredit(licenseEl, channel.license);
+  setCredit(sourceEl, channel.source);
+}
+
+// 配信一覧を1件ずつボタンとして描画する。現在再生中のチャンネルにはチェックを付け、
+// クリックでそのチャンネルに再生を切り替える。
+function renderChannelList(channels) {
+  if (!channelListEl) return;
+  channelListEl.innerHTML = "";
+
+  for (const channel of channels) {
+    if (channel.retired) continue; // 配信終了したチャンネルは一覧に出さない
+
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "channel-list-item";
+    const isCurrent = channel.id === currentChannelId;
+    button.setAttribute("aria-current", String(isCurrent));
+
+    if (isCurrent) {
+      const check = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      check.setAttribute("class", "channel-list-item-check");
+      check.setAttribute("aria-hidden", "true");
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", "#icon-check");
+      check.appendChild(use);
+      button.appendChild(check);
+    }
+
+    // タイトルとカテゴリを別要素にして、カテゴリだけ右寄せ・グレー表示にできるようにする
+    const title = document.createElement("span");
+    title.textContent = channel.title ?? "";
+    button.appendChild(title);
+
+    if (channel.category) {
+      const category = document.createElement("span");
+      category.className = "channel-list-item-category";
+      category.textContent = channel.category;
+      button.appendChild(category);
+    }
+
+    button.addEventListener("click", () => selectChannel(channel));
+
+    li.appendChild(button);
+    channelListEl.appendChild(li);
+  }
+}
+
+// 配信一覧からチャンネルを選んだときの処理。再生を切り替え、タイトル情報・一覧の
+// チェックマークを更新し、タイトル情報paneへスライドで戻す。
+function selectChannel(channel) {
+  if (channel.id !== currentChannelId) {
+    playStream(`${HLS_BASE_URL}${channel.playlist}`);
+    currentChannelId = channel.id;
+    renderChannelInfo(channel);
+    renderChannelList(allChannels);
+  }
+  setChannelListView(false);
+}
+
+if (
+  videoMetaEl &&
+  videoMetaInfoEl &&
+  channelListToggle &&
+  channelListBackButton &&
+  videoTitleTextEl &&
+  videoCategoryEl &&
+  attributionEl &&
+  licenseEl &&
+  sourceEl &&
+  channelListPanel &&
+  channelListEl
+) {
+  channelListToggle.addEventListener("click", () => setChannelListView(true));
+  channelListBackButton.addEventListener("click", () => setChannelListView(false));
+
+  fetch(CHANNELS_URL)
+    .then((response) => response.json())
+    .then((channels) => {
+      // 現在再生しているのはデフォルトチャンネル（/stream.m3u8）なので、
+      // 一覧の中からdefault:trueの1件を探して表示する。
+      const defaultChannel = channels.find((channel) => channel.default);
+      if (!defaultChannel) return;
+
+      allChannels = channels;
+      currentChannelId = defaultChannel.id;
+      renderChannelInfo(defaultChannel);
+      renderChannelList(channels);
+    })
+    .catch((error) => {
+      console.error("チャンネル情報の取得に失敗しました", error);
+      for (const row of videoCreditEls) row.hidden = true;
+    });
 }
 
 /**
