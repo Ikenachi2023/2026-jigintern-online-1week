@@ -56,6 +56,24 @@
           stroke-linecap="round"
         />
       </symbol>
+      <symbol id="icon-comment" viewBox="0 0 24 24">
+        <rect x="2" y="4" width="13" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+        <polygon points="5,14 5,18 9,14" fill="currentColor" />
+      </symbol>
+      <symbol id="icon-comment-off" viewBox="0 0 24 24">
+        <rect x="2" y="4" width="13" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+        <polygon points="5,14 5,18 9,14" fill="currentColor" />
+        <!-- マークの右側にXを置くミュートアイコンとは違い、マーク自体に斜線を入れて「オフ」を表す -->
+        <line
+          x1="18"
+          y1="3"
+          x2="2"
+          y2="19"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+      </symbol>
       <symbol id="icon-fullscreen-enter" viewBox="0 0 24 24">
         <path
           d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"
@@ -183,6 +201,20 @@
                 aria-label="音量"
               />
             </div>
+            <!-- 全画面中に流れるコメント演出だけを止める。サイドバーのコメント欄自体は消えない。
+                 全画面以外では演出自体が発生しないため、ボタンもhiddenにしておく
+                 （main.jsのfullscreenchangeで表示/非表示を切り替える） -->
+            <button
+              type="button"
+              class="video-control-button video-comment-toggle"
+              aria-label="コメント表示オフ"
+              aria-pressed="false"
+              hidden
+            >
+              <svg class="icon">
+                <use id="comment-icon-use" href="#icon-comment"></use>
+              </svg>
+            </button>
             <div class="video-controls-spacer"></div>
             <button
               type="button"

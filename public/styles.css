@@ -824,6 +824,12 @@ h1 {
   flex-shrink: 0;
 }
 
+/* display: flexの指定がブラウザ標準の[hidden] { display: none }より詳細度で勝ってしまい、
+   hidden属性を付けても表示されたままになるため、明示的に上書きする */
+.video-control-button[hidden] {
+  display: none;
+}
+
 .video-control-button:hover {
   color: var(--hibiscus);
 }
