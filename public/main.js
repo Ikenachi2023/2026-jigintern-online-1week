@@ -564,12 +564,21 @@ if (
   // 開閉ボタン：押すたびに一覧（絞り込みボタン＋アイテム）の表示・非表示を切り替える。
   // 開いている間はラベルを「閉じる」に変え、押せば閉じられることが伝わるようにする。
   itemToggle.addEventListener("click", () => {
+    // アイテムパネルの開閉でsend-areaの高さが変わり、コメント欄の表示領域(clientHeight)も
+    // 連動して縮む/広がる。開閉前に最下部を見ていた場合、何もしないとその高さの変化だけで
+    // 「下に戻る」ボタンが誤って出てしまうため、その場合はスクロール位置を追従させる。
+    const wasAtBottom = commentArea && isCommentAreaScrolledToBottom();
+
     const isExpanded = itemToggle.getAttribute("aria-expanded") === "true";
     itemToggle.setAttribute("aria-expanded", String(!isExpanded));
     itemPriceFilter.hidden = isExpanded; // 開いていたら隠す、隠れていたら表示する
     itemListRow.hidden = isExpanded;
     if (itemToggleLabel) {
       itemToggleLabel.textContent = isExpanded ? "アイテムを送る" : "閉じる";
+    }
+
+    if (wasAtBottom) {
+      scrollCommentAreaToBottom();
     }
   });
 
