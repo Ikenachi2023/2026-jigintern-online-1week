@@ -188,6 +188,11 @@ if (
       "aria-label",
       isFullscreen ? "全画面表示を終了" : "全画面表示",
     );
+    // 全画面を終了すると流れるコメントは表示上の意味を失う（サイドバーのコメント欄が
+    // 見える状態に戻るため）ので、残っているコメントを消して次の全画面時に持ち越さない。
+    if (!isFullscreen && videoDanmakuLayer) {
+      videoDanmakuLayer.replaceChildren();
+    }
   });
 
   // マウス操作があった間だけコントロールバーを表示し、無操作が続いたらフェードアウトする。
@@ -221,26 +226,82 @@ const prefersReducedMotion = window.matchMedia(
   "(prefers-reduced-motion: reduce)",
 ).matches;
 
-function spawnDanmakuComment(text) {
-  // 全画面時以外はサイドバーのコメント欄で十分見えているため、二重に流さない。
+// レーン（縦位置）を順番に割り当てる。コメント・アイテムで共通のプールを使う。
+function nextDanmakuLaneTop() {
+  const lane = danmakuLaneIndex % DANMAKU_LANE_COUNT;
+  danmakuLaneIndex += 1;
+  return `${(lane / DANMAKU_LANE_COUNT) * 100}%`;
+}
+
+// 全画面判定とreduced-motion判定は3種類のdanmaku（コメント・アイテム・コメント付き
+// アイテム）で共通なので、ここにまとめて呼び出し側の条件分岐を減らす。
+function canSpawnDanmaku() {
   // reduced-motion環境ではCSS側でレイヤーごと非表示にしており、
   // animationendが発火せず要素が残ってしまうため、ここで作らずに止める
-  if (!videoPlayer || !videoDanmakuLayer || !text || prefersReducedMotion) return;
-  if (document.fullscreenElement !== videoPlayer) return;
+  if (!videoPlayer || !videoDanmakuLayer || prefersReducedMotion) return false;
+  // 全画面時以外はサイドバーのコメント欄で十分見えているため、二重に流さない。
+  return document.fullscreenElement === videoPlayer;
+}
+
+function spawnDanmakuComment(text) {
+  if (!text || !canSpawnDanmaku()) return;
 
   const span = document.createElement("span");
   span.className = "video-danmaku-comment";
   span.textContent = text;
-
-  const lane = danmakuLaneIndex % DANMAKU_LANE_COUNT;
-  danmakuLaneIndex += 1;
-  span.style.top = `${(lane / DANMAKU_LANE_COUNT) * 100}%`;
+  span.style.top = nextDanmakuLaneTop();
 
   // 文字数が多いほど画面に出続けると邪魔になるため、短い時間で早く流し切る
   span.style.animationDuration = `${Math.max(4, 9 - text.length / 8)}s`;
 
+  // animationendはCSSのアニメーションが1回終わったタイミングで発火するイベント。
+  // forwards指定で流れ切った後も要素が画面外に残り続けるため、ここで自分で消す
   span.addEventListener("animationend", () => span.remove());
   videoDanmakuLayer.appendChild(span);
+}
+
+// アイテム単体（コメントなし）はキャプション文字を持たせず、アイコンだけを流す。
+// 文字数の概念が無いため速さは固定とし、複数アイテムが前後入れ替わって見える
+// 分かりにくさを避ける。
+const DANMAKU_ITEM_DURATION = "6s";
+
+function spawnDanmakuItem(iconUrl) {
+  if (!iconUrl || !canSpawnDanmaku()) return;
+
+  const img = document.createElement("img");
+  img.className = "video-danmaku-item";
+  img.src = iconUrl;
+  img.alt = "";
+  img.style.top = nextDanmakuLaneTop();
+  img.style.animationDuration = DANMAKU_ITEM_DURATION;
+
+  img.addEventListener("animationend", () => img.remove());
+  videoDanmakuLayer.appendChild(img);
+}
+
+// コメント付きアイテムは本文が主役で、アイテム単体（アイコンのみの半透明演出）
+// より価値が高い情報なので、枠で囲わず通常コメントと同じ不透明・縁取りの
+// スタイルで流す（色だけブランドカラーにして区別する、詳細はCSS側）。
+// 速さは通常の文字コメントと同じ計算式を使い、長文が画面に居座らないようにする。
+function spawnDanmakuItemComment(iconUrl, text) {
+  if (!iconUrl || !text || !canSpawnDanmaku()) return;
+
+  const wrapper = document.createElement("span");
+  wrapper.className = "video-danmaku-item-comment";
+  wrapper.style.top = nextDanmakuLaneTop();
+  wrapper.style.animationDuration = `${Math.max(4, 9 - text.length / 8)}s`;
+
+  const img = document.createElement("img");
+  img.className = "video-danmaku-item-comment-icon";
+  img.src = iconUrl;
+  img.alt = "";
+
+  const textSpan = document.createElement("span");
+  textSpan.textContent = text;
+
+  wrapper.append(img, textSpan);
+  wrapper.addEventListener("animationend", () => wrapper.remove());
+  videoDanmakuLayer.appendChild(wrapper);
 }
 
 /**
@@ -694,7 +755,8 @@ function addItem(iconUrl, name) {
   li.append(img, p);//liにimgとpを追加
 
   appendCommentItem(li);
-  spawnDanmakuComment(caption);
+  // 全画面時は「〇〇が送られました！」の文字は出さず、アイコンだけを流す
+  spawnDanmakuItem(iconUrl);
 }
 
 /**
@@ -721,5 +783,5 @@ function addItemWithComment(iconUrl, name, text) {
   li.append(img, p, caption);
 
   appendCommentItem(li);
-  spawnDanmakuComment(text);
+  spawnDanmakuItemComment(iconUrl, text);
 }
