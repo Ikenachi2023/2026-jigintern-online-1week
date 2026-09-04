@@ -15,10 +15,6 @@ body {
   padding: 16px;
 }
 
-h1 {
-  color: var(--hibiscus);
-}
-
 .layout {
   display: flex;
   gap: 16px;
@@ -383,6 +379,17 @@ h1 {
   font-family: inherit;
   resize: none;
   overflow-y: auto;
+  /* main.js側でscrollHeight（padding込みの高さ）をそのままstyle.heightに入れているため、
+     content-boxのままだとpaddingが二重に加算されて入力直後に欄が一段大きくなってしまう */
+  box-sizing: border-box;
+  /* max-heightを超えた分はスクロールで見せるが、丸角の入力欄にネイティブの
+     スクロールバーが出ると見た目が崩れるため非表示にする（スクロール自体は維持） */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 旧Edge/IE */
+}
+
+.comment-input::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .comment-input:focus {
@@ -962,7 +969,10 @@ h1 {
   border-radius: 8px;
   padding: 12px 16px;
   overflow-y: auto;
-  min-height: 0;
+  /* overflow-yがvisible以外だとflexアイテムの自動最小サイズが0扱いになり、
+     動画エリアの高さが足りないとタイトル/説明が完全に潰れてしまうため、
+     最低限タイトル1行＋説明1行が読める高さを確保する */
+  min-height: 5rem;
 }
 
 .video-title {
@@ -1098,11 +1108,6 @@ h1 {
 @media (max-width: 600px) {
   body {
     padding: 12px;
-  }
-
-  h1 {
-    font-size: 1.2rem;
-    margin: 0 0 12px;
   }
 
   .layout {
