@@ -1,7 +1,10 @@
 /**
  * 動画プレイヤー（HLS再生）
  */
-const STREAM_URL = "https://intern-hls-server.tdmi0e341.workers.dev/stream.m3u8";
+// サーバーが複数チャンネル配信に対応したため、チャンネル一覧取得・個別プレイリスト取得の
+// 両方でホストを共通化できるよう、ベースURLとして切り出しておく。
+const HLS_BASE_URL = "https://intern-hls-server.tomaton.workers.dev";
+const STREAM_URL = `${HLS_BASE_URL}/stream.m3u8`;
 const video = document.getElementById("video");
 const videoPlayer = document.querySelector(".video-player");
 const videoStatus = document.querySelector(".video-status");
@@ -58,6 +61,133 @@ if (video) {
   // 再生が始まったら状態表示を消し、バッファリングで止まったら読み込み中に戻す。
   video.addEventListener("playing", () => setVideoStatus(null));
   video.addEventListener("waiting", () => setVideoStatus("loading"));
+}
+
+/**
+ * 配信チャンネル情報の表示・配信一覧
+ * 今はチャンネル切り替えは行わず、/stream.m3u8（デフォルトチャンネル）に対応する
+ * 情報をchannels.jsonから探して表示する。タイトルを開くと他チャンネルの一覧も見られるが、
+ * クリックしても再生の切り替えはまだ実装しない（表示のみ）。
+ */
+const CHANNELS_URL = `${HLS_BASE_URL}/channels.json`;
+const videoMetaEl = document.querySelector(".video-meta");
+const videoMetaInfoEl = document.querySelector(".video-meta-info");
+const videoCategoryEl = document.querySelector(".video-category");
+const channelListToggle = document.querySelector(".video-channel-list-toggle");
+const channelListBackButton = document.querySelector(".channel-list-back");
+const videoTitleTextEl = document.querySelector(".video-title-text");
+const attributionEl = document.querySelector(".video-credit-attribution dd");
+const licenseEl = document.querySelector(".video-credit-license dd");
+const sourceEl = document.querySelector(".video-credit-source dd a");
+const videoCreditEls = document.querySelectorAll(".video-credit");
+const channelListPanel = document.querySelector("#channel-list-panel");
+const channelListEl = document.querySelector(".channel-list");
+
+// タイトル情報／配信一覧をスライドで切り替える。表示していない方はinertにして、
+// キーボード操作やスクリーンリーダーが画面外の要素に迷い込まないようにする。
+function setChannelListView(showChannels) {
+  if (!videoMetaEl) return;
+  videoMetaEl.dataset.view = showChannels ? "channels" : "info";
+  if (channelListToggle) channelListToggle.setAttribute("aria-expanded", String(showChannels));
+  if (videoMetaInfoEl) videoMetaInfoEl.inert = showChannels;
+  if (channelListPanel) channelListPanel.inert = !showChannels;
+}
+
+// channels.jsonの項目は無い場合もあるため、値が無い項目（dtとddの組）ごと隠す。
+function setCredit(el, value) {
+  const row = el.closest(".video-credit");
+  if (!row) return;
+  if (!value) {
+    row.hidden = true;
+    return;
+  }
+  row.hidden = false;
+  if (el.tagName === "A") {
+    el.href = value;
+    el.textContent = value.replace(/^https?:\/\//, "");
+  } else {
+    el.textContent = value;
+  }
+}
+
+// 配信一覧を1件ずつボタンとして描画する。現在再生中のチャンネルにはチェックを付ける。
+// クリックイベントは無し（切り替えロジックは別タスク）。
+function renderChannelList(channels, currentChannelId) {
+  if (!channelListEl) return;
+  channelListEl.innerHTML = "";
+
+  for (const channel of channels) {
+    if (channel.retired) continue; // 配信終了したチャンネルは一覧に出さない
+
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "channel-list-item";
+    const isCurrent = channel.id === currentChannelId;
+    button.setAttribute("aria-current", String(isCurrent));
+
+    if (isCurrent) {
+      const check = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      check.setAttribute("class", "channel-list-item-check");
+      check.setAttribute("aria-hidden", "true");
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", "#icon-check");
+      check.appendChild(use);
+      button.appendChild(check);
+    }
+
+    // タイトルとカテゴリを別要素にして、カテゴリだけ右寄せ・グレー表示にできるようにする
+    const title = document.createElement("span");
+    title.textContent = channel.title ?? "";
+    button.appendChild(title);
+
+    if (channel.category) {
+      const category = document.createElement("span");
+      category.className = "channel-list-item-category";
+      category.textContent = channel.category;
+      button.appendChild(category);
+    }
+
+    li.appendChild(button);
+    channelListEl.appendChild(li);
+  }
+}
+
+if (
+  videoMetaEl &&
+  videoMetaInfoEl &&
+  channelListToggle &&
+  channelListBackButton &&
+  videoTitleTextEl &&
+  videoCategoryEl &&
+  attributionEl &&
+  licenseEl &&
+  sourceEl &&
+  channelListPanel &&
+  channelListEl
+) {
+  channelListToggle.addEventListener("click", () => setChannelListView(true));
+  channelListBackButton.addEventListener("click", () => setChannelListView(false));
+
+  fetch(CHANNELS_URL)
+    .then((response) => response.json())
+    .then((channels) => {
+      // 現在再生しているのはデフォルトチャンネル（/stream.m3u8）なので、
+      // 一覧の中からdefault:trueの1件を探して表示する。
+      const defaultChannel = channels.find((channel) => channel.default);
+      if (!defaultChannel) return;
+
+      videoCategoryEl.textContent = defaultChannel.category ?? "";
+      videoTitleTextEl.textContent = defaultChannel.title ?? "";
+      setCredit(attributionEl, defaultChannel.attribution);
+      setCredit(licenseEl, defaultChannel.license);
+      setCredit(sourceEl, defaultChannel.source);
+      renderChannelList(channels, defaultChannel.id);
+    })
+    .catch((error) => {
+      console.error("チャンネル情報の取得に失敗しました", error);
+      for (const row of videoCreditEls) row.hidden = true;
+    });
 }
 
 /**
