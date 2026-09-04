@@ -197,6 +197,8 @@ if (
     }
     // オン/オフボタンは全画面中の演出にしか意味が無いため、全画面以外では隠す
     if (commentToggle) commentToggle.hidden = !isFullscreen;
+    // 全画面にした瞬間、直近に届いていたコメントが既に流れている状態から再現する
+    if (isFullscreen) replayRecentDanmaku();
   });
 
   if (commentToggle && commentIconUse) {
@@ -269,16 +271,25 @@ function canSpawnDanmaku() {
   return document.fullscreenElement === videoPlayer;
 }
 
-function spawnDanmakuComment(text) {
+// elapsedSecondsは「本来ならもう何秒流れているはずか」。全画面化した瞬間に、
+// 直近に届いていたコメントを最初から出すのではなく途中から流れている状態で
+// 再現するために使う（0なら通常どおり右端から流し始める）。
+function spawnDanmakuComment(text, elapsedSeconds = 0) {
   if (!text || !canSpawnDanmaku()) return;
+
+  // 文字数が多いほど画面に出続けると邪魔になるため、短い時間で早く流し切る
+  const duration = Math.max(4, 9 - text.length / 8);
+  // 再現しようとしている時点でもう流れ切っているはずのコメントは出さない
+  if (elapsedSeconds >= duration) return;
 
   const span = document.createElement("span");
   span.className = "video-danmaku-comment";
   span.textContent = text;
   span.style.top = nextDanmakuLaneTop();
-
-  // 文字数が多いほど画面に出続けると邪魔になるため、短い時間で早く流し切る
-  span.style.animationDuration = `${Math.max(4, 9 - text.length / 8)}s`;
+  span.style.animationDuration = `${duration}s`;
+  // 負のanimation-delayは「そのまま再生していた場合の何秒後」の状態から始まる指定。
+  // これで右端からではなく、本来いるはずの位置から流れ始める。
+  if (elapsedSeconds > 0) span.style.animationDelay = `-${elapsedSeconds}s`;
 
   // animationendはCSSのアニメーションが1回終わったタイミングで発火するイベント。
   // forwards指定で流れ切った後も要素が画面外に残り続けるため、ここで自分で消す
@@ -289,17 +300,19 @@ function spawnDanmakuComment(text) {
 // アイテム単体（コメントなし）はキャプション文字を持たせず、アイコンだけを流す。
 // 文字数の概念が無いため速さは固定とし、複数アイテムが前後入れ替わって見える
 // 分かりにくさを避ける。
-const DANMAKU_ITEM_DURATION = "6s";
+const DANMAKU_ITEM_DURATION = 6;
 
-function spawnDanmakuItem(iconUrl) {
+function spawnDanmakuItem(iconUrl, elapsedSeconds = 0) {
   if (!iconUrl || !canSpawnDanmaku()) return;
+  if (elapsedSeconds >= DANMAKU_ITEM_DURATION) return;
 
   const img = document.createElement("img");
   img.className = "video-danmaku-item";
   img.src = iconUrl;
   img.alt = "";
   img.style.top = nextDanmakuLaneTop();
-  img.style.animationDuration = DANMAKU_ITEM_DURATION;
+  img.style.animationDuration = `${DANMAKU_ITEM_DURATION}s`;
+  if (elapsedSeconds > 0) img.style.animationDelay = `-${elapsedSeconds}s`;
 
   img.addEventListener("animationend", () => img.remove());
   videoDanmakuLayer.appendChild(img);
@@ -309,13 +322,17 @@ function spawnDanmakuItem(iconUrl) {
 // より価値が高い情報なので、枠で囲わず通常コメントと同じ不透明・縁取りの
 // スタイルで流す（色だけブランドカラーにして区別する、詳細はCSS側）。
 // 速さは通常の文字コメントと同じ計算式を使い、長文が画面に居座らないようにする。
-function spawnDanmakuItemComment(iconUrl, text) {
+function spawnDanmakuItemComment(iconUrl, text, elapsedSeconds = 0) {
   if (!iconUrl || !text || !canSpawnDanmaku()) return;
+
+  const duration = Math.max(4, 9 - text.length / 8);
+  if (elapsedSeconds >= duration) return;
 
   const wrapper = document.createElement("span");
   wrapper.className = "video-danmaku-item-comment";
   wrapper.style.top = nextDanmakuLaneTop();
-  wrapper.style.animationDuration = `${Math.max(4, 9 - text.length / 8)}s`;
+  wrapper.style.animationDuration = `${duration}s`;
+  if (elapsedSeconds > 0) wrapper.style.animationDelay = `-${elapsedSeconds}s`;
 
   const img = document.createElement("img");
   img.className = "video-danmaku-item-comment-icon";
@@ -328,6 +345,35 @@ function spawnDanmakuItemComment(iconUrl, text) {
   wrapper.append(img, textSpan);
   wrapper.addEventListener("animationend", () => wrapper.remove());
   videoDanmakuLayer.appendChild(wrapper);
+}
+
+// 全画面化した瞬間に「既に流れていたコメント」を再現するための直近バッファ。
+// サーバー側は投稿を保持しない（USAGE.md参照）ため再取得はできず、このクライアントが
+// /eventsで受け取った分をその場で覚えておくしかない。どのdanmakuも最長9秒で流れ切るため、
+// 7秒より古い分は再現の対象にしない。
+const DANMAKU_REPLAY_WINDOW_SECONDS = 7;
+let recentDanmakuMessages = [];
+
+// バッファが増え続けないよう、再現ウィンドウより古くなった分をここで間引く
+function recordDanmakuMessage(entry) {
+  recentDanmakuMessages.push(entry);
+  const cutoffMs = Date.now() - (DANMAKU_REPLAY_WINDOW_SECONDS + 3) * 1000;
+  recentDanmakuMessages = recentDanmakuMessages.filter((m) => m.timestampMs >= cutoffMs);
+}
+
+// 全画面化した瞬間に、直近DANMAKU_REPLAY_WINDOW_SECONDS秒以内に届いていた分を
+// 「本来もう流れているはずの位置」から流し直す。
+function replayRecentDanmaku() {
+  const cutoffMs = Date.now() - DANMAKU_REPLAY_WINDOW_SECONDS * 1000;
+  for (const entry of recentDanmakuMessages) {
+    if (entry.timestampMs < cutoffMs) continue;
+    const elapsedSeconds = (Date.now() - entry.timestampMs) / 1000;
+    if (entry.type === "comment") spawnDanmakuComment(entry.text, elapsedSeconds);
+    else if (entry.type === "item") spawnDanmakuItem(entry.iconUrl, elapsedSeconds);
+    else if (entry.type === "itemComment") {
+      spawnDanmakuItemComment(entry.iconUrl, entry.text, elapsedSeconds);
+    }
+  }
 }
 
 /**
@@ -425,19 +471,31 @@ if (commentArea) {
     }
     if (!payload) return;
 
+    // 全画面化した瞬間に「既に流れていた」状態を再現するため、danmaku用の
+    // バッファにも記録しておく（timestampが無い場合は再現の対象にしない）。
+    const timestampMs = payload.timestamp ? Date.parse(payload.timestamp) : NaN;
+
     // textとitemの両方があれば「コメント付きアイテム」として1つにまとめて表示する。
     if (payload.text && payload.item) {
-      addItemWithComment(
-        payload.item.iconUrl ?? "", //Null合体演算子：左側の値が null または undefined のときだけ、右側の値を代わりに使います
-        payload.item.name ?? "",
-        payload.text,
-      );
+      const iconUrl = payload.item.iconUrl ?? ""; //Null合体演算子：左側の値が null または undefined のときだけ、右側の値を代わりに使います
+      const name = payload.item.name ?? "";
+      if (!Number.isNaN(timestampMs)) {
+        recordDanmakuMessage({ type: "itemComment", iconUrl, text: payload.text, timestampMs });
+      }
+      addItemWithComment(iconUrl, name, payload.text);
     } else if (payload.text) {
       // text プロパティのみあれば「コメント」として表示する。
+      if (!Number.isNaN(timestampMs)) {
+        recordDanmakuMessage({ type: "comment", text: payload.text, timestampMs });
+      }
       addComment(payload.text);
     } else if (payload.item) {
       // item プロパティのみあれば「アイテム」として表示する。
-      addItem(payload.item.iconUrl ?? "", payload.item.name ?? "");
+      const iconUrl = payload.item.iconUrl ?? "";
+      if (!Number.isNaN(timestampMs)) {
+        recordDanmakuMessage({ type: "item", iconUrl, timestampMs });
+      }
+      addItem(iconUrl, payload.item.name ?? "");
     }
   };
 }
