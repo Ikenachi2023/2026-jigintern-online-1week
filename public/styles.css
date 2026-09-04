@@ -351,8 +351,9 @@ body {
   gap: 12px;
   overflow: hidden; /* 1ページ分（5件）だけが見えるようにする */
   /* 絞り込みでアイテムが5件未満になっても、ボタン5個分の幅を常に確保して
-     フィルタ切り替えのたびにパネル幅がガタつかないようにする */
-  min-width: calc(4rem * 5 + 12px * 4);
+     フィルタ切り替えのたびにパネル幅がガタつかないようにする。前後の覗き見装飾
+     (.item-button-peek)も常にDOM上に置く前提で、その分の幅+間隔も含めておく */
+  min-width: calc(4rem * 5 + 12px * 4 + (18px + 12px) * 2);
 }
 
 .item-page-button {
@@ -418,6 +419,37 @@ body {
 .item-button-price {
   font-size: 0.65rem;
   color: var(--hibiscus);
+}
+
+/* 前後ページの存在を示す装飾。実アイテムのアイコンは読み込まず、
+   カードの端っこだけがフェードアウトしながら覗いている見た目だけを作る。
+   前後のページがない場合もDOM上には残したままvisibility:hiddenにするだけなので、
+   他のボタンとの間隔（gap: 12px）や.item-listの幅は表示/非表示に関わらず変わらない */
+.item-button-peek {
+  flex-shrink: 0;
+  width: 18px;
+  height: 7rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.item-button-peek--hidden {
+  visibility: hidden;
+}
+
+/* 次ページ側（右）：手前は見せつつ、右にいくほど透明にフェードアウトさせる
+   （幅いっぱいで急に透明になると「端っこ過ぎる」印象になるため、途中までは
+   不透明を保ってから緩やかにフェードさせる） */
+.item-button-peek-next {
+  mask-image: linear-gradient(to right, #000 40%, transparent 90%);
+  -webkit-mask-image: linear-gradient(to right, #000 40%, transparent 90%);
+}
+
+/* 前ページ側（左）：同様に左にいくほど緩やかにフェードアウト */
+.item-button-peek-prev {
+  mask-image: linear-gradient(to left, #000 40%, transparent 90%);
+  -webkit-mask-image: linear-gradient(to left, #000 40%, transparent 90%);
 }
 
 .item-list-empty {

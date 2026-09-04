@@ -913,9 +913,27 @@ if (
 
     const start = currentPage * ITEMS_PER_PAGE;
     const pageItems = filteredItems.slice(start, start + ITEMS_PER_PAGE);
+
+    // 前後のページがあることを示すため、実際の前後アイテムは読み込まず（通信量を増やさない）、
+    // カードの端っこだけがフェードアウトして覗いているような装飾要素を足す。
+    // 前後どちらのページもない場合を含め常にDOMに置いてvisibilityだけ切り替えることで、
+    // 装飾の有無によってitem-listの幅（他ボタンとの間隔）が変わらないようにしている。
+    const peekPrev = document.createElement("div");
+    peekPrev.className = "item-button-peek item-button-peek-prev";
+    peekPrev.setAttribute("aria-hidden", "true");
+    if (currentPage <= 0) peekPrev.classList.add("item-button-peek--hidden");
+    itemList.appendChild(peekPrev);
+
     for (const item of pageItems) {
       itemList.appendChild(createItemButton(item));
     }
+
+    const peekNext = document.createElement("div");
+    peekNext.className = "item-button-peek item-button-peek-next";
+    peekNext.setAttribute("aria-hidden", "true");
+    if (currentPage >= maxPage)
+      peekNext.classList.add("item-button-peek--hidden");
+    itemList.appendChild(peekNext);
 
     itemPagePrev.disabled = currentPage === 0;
     itemPageNext.disabled = currentPage >= maxPage;
