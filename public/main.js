@@ -35,22 +35,38 @@ function setVideoStatus(mode) {
   videoStatus.dataset.mode = mode;
 }
 
+// チャンネル切り替え時に他チャンネルのプレイリストを読み直せるよう、
+// hls.jsインスタンス／ネイティブ再生かどうかを外から参照できるようにしておく。
+let hlsInstance = null;
+let useNativeHls = false;
+
+// 指定したプレイリストURLに切り替えて再生する。初回再生・チャンネル切り替えの両方で使う。
+function playStream(url) {
+  setVideoStatus("loading");
+  if (hlsInstance) {
+    hlsInstance.loadSource(url);
+  } else if (useNativeHls) {
+    video.src = url;
+  }
+}
+
 if (video) {
   setVideoStatus("loading");
 
   if (window.Hls && Hls.isSupported()) {
-    const hls = new Hls({ capLevelToPlayerSize: true });
-    hls.loadSource(STREAM_URL);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    hlsInstance = new Hls({ capLevelToPlayerSize: true });
+    hlsInstance.loadSource(STREAM_URL);
+    hlsInstance.attachMedia(video);
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
       // autoplay属性だけでは再生されない環境があるため、明示的に呼ぶ（失敗は無視してよい）
       video.play().catch(() => {});
     });
-    hls.on(Hls.Events.ERROR, (_event, data) => {
+    hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
       if (data.fatal) setVideoStatus("error");
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     // hls.jsが使えない環境（Safariなど）では、ブラウザネイティブのHLS再生にフォールバックする。
+    useNativeHls = true;
     video.src = STREAM_URL;
     video.addEventListener("loadedmetadata", () => {
       video.play().catch(() => {});
@@ -64,10 +80,8 @@ if (video) {
 }
 
 /**
- * 配信チャンネル情報の表示・配信一覧
- * 今はチャンネル切り替えは行わず、/stream.m3u8（デフォルトチャンネル）に対応する
- * 情報をchannels.jsonから探して表示する。タイトルを開くと他チャンネルの一覧も見られるが、
- * クリックしても再生の切り替えはまだ実装しない（表示のみ）。
+ * 配信チャンネル情報の表示・配信一覧・チャンネル切り替え
+ * channels.jsonを取得し、現在の配信情報の表示と、配信一覧からの再生切り替えを行う。
  */
 const CHANNELS_URL = `${HLS_BASE_URL}/channels.json`;
 const videoMetaEl = document.querySelector(".video-meta");
@@ -82,6 +96,11 @@ const sourceEl = document.querySelector(".video-credit-source dd a");
 const videoCreditEls = document.querySelectorAll(".video-credit");
 const channelListPanel = document.querySelector("#channel-list-panel");
 const channelListEl = document.querySelector(".channel-list");
+
+// 一覧のチェックマーク更新・切り替え先探索のため、取得したチャンネル一覧と
+// 現在再生中のチャンネルIDを覚えておく。
+let allChannels = [];
+let currentChannelId = null;
 
 // タイトル情報／配信一覧をスライドで切り替える。表示していない方はinertにして、
 // キーボード操作やスクリーンリーダーが画面外の要素に迷い込まないようにする。
@@ -110,9 +129,18 @@ function setCredit(el, value) {
   }
 }
 
-// 配信一覧を1件ずつボタンとして描画する。現在再生中のチャンネルにはチェックを付ける。
-// クリックイベントは無し（切り替えロジックは別タスク）。
-function renderChannelList(channels, currentChannelId) {
+// タイトル情報pane（カテゴリ・タイトル・出典情報）を指定チャンネルの内容に差し替える。
+function renderChannelInfo(channel) {
+  videoCategoryEl.textContent = channel.category ?? "";
+  videoTitleTextEl.textContent = channel.title ?? "";
+  setCredit(attributionEl, channel.attribution);
+  setCredit(licenseEl, channel.license);
+  setCredit(sourceEl, channel.source);
+}
+
+// 配信一覧を1件ずつボタンとして描画する。現在再生中のチャンネルにはチェックを付け、
+// クリックでそのチャンネルに再生を切り替える。
+function renderChannelList(channels) {
   if (!channelListEl) return;
   channelListEl.innerHTML = "";
 
@@ -148,9 +176,23 @@ function renderChannelList(channels, currentChannelId) {
       button.appendChild(category);
     }
 
+    button.addEventListener("click", () => selectChannel(channel));
+
     li.appendChild(button);
     channelListEl.appendChild(li);
   }
+}
+
+// 配信一覧からチャンネルを選んだときの処理。再生を切り替え、タイトル情報・一覧の
+// チェックマークを更新し、タイトル情報paneへスライドで戻す。
+function selectChannel(channel) {
+  if (channel.id !== currentChannelId) {
+    playStream(`${HLS_BASE_URL}${channel.playlist}`);
+    currentChannelId = channel.id;
+    renderChannelInfo(channel);
+    renderChannelList(allChannels);
+  }
+  setChannelListView(false);
 }
 
 if (
@@ -177,12 +219,10 @@ if (
       const defaultChannel = channels.find((channel) => channel.default);
       if (!defaultChannel) return;
 
-      videoCategoryEl.textContent = defaultChannel.category ?? "";
-      videoTitleTextEl.textContent = defaultChannel.title ?? "";
-      setCredit(attributionEl, defaultChannel.attribution);
-      setCredit(licenseEl, defaultChannel.license);
-      setCredit(sourceEl, defaultChannel.source);
-      renderChannelList(channels, defaultChannel.id);
+      allChannels = channels;
+      currentChannelId = defaultChannel.id;
+      renderChannelInfo(defaultChannel);
+      renderChannelList(channels);
     })
     .catch((error) => {
       console.error("チャンネル情報の取得に失敗しました", error);
