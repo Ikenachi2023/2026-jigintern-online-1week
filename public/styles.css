@@ -537,6 +537,7 @@ body {
 }
 
 .send-button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -556,6 +557,10 @@ body {
 
 .send-button-spinner {
   display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 12px;
   height: 12px;
   border: 2px solid rgba(255, 255, 255, 0.4);
@@ -565,6 +570,10 @@ body {
 
 .send-button-check {
   display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 14px;
   height: 14px;
 }
@@ -574,19 +583,28 @@ body {
   height: 100%;
 }
 
-/* 送信中はラベルを隠してスピナーを回す */
+/* 送信中／送信直後もボタンの大きさが変わらないよう、ラベルはvisibility:hiddenで
+   場所だけ確保し、スピナー/チェックはボタン中央に絶対配置で重ねる */
 .send-button.is-sending .send-button-label {
-  display: none;
+  visibility: hidden;
 }
 
 .send-button.is-sending .send-button-spinner {
   display: block;
-  animation: video-spinner-spin 0.8s linear infinite;
+  animation: send-button-spinner-spin 0.8s linear infinite;
+}
+
+/* video-spinner-spinは絶対配置での中央寄せ(translate)を考慮していないため、
+   send-button内では専用のキーフレームでtranslateを保ったまま回転させる */
+@keyframes send-button-spinner-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 /* 送信成功直後、一瞬だけラベルをチェックマークに切り替える */
 .send-button.is-sent .send-button-label {
-  display: none;
+  visibility: hidden;
 }
 
 .send-button.is-sent .send-button-check {
@@ -596,11 +614,11 @@ body {
 
 @keyframes send-button-check-pop {
   from {
-    transform: scale(0.5);
+    transform: translate(-50%, -50%) scale(0.5);
     opacity: 0;
   }
   to {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
     opacity: 1;
   }
 }

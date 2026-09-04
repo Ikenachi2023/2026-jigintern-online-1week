@@ -225,7 +225,7 @@ if (
       renderChannelList(channels);
     })
     .catch((error) => {
-      console.error("チャンネル情報の取得に失敗しました", error);
+      console.error("チャンネル情報の取得に失敗しました:(", error);
       for (const row of videoCreditEls) row.hidden = true;
     });
 }
@@ -950,7 +950,7 @@ if (
         renderPage(currentPage);
       })
       .catch((error) => {
-        console.error("アイテム一覧の取得に失敗しました", error);
+        console.error("アイテム一覧の取得に失敗しました:(", error);
       });
   }
 
@@ -1037,8 +1037,8 @@ if (sendArea && commentInput && sendButton && sendError) {
         body: JSON.stringify(body),
       });
     } catch (error) {
-      console.error("送信に失敗しました", error);
-      showSendError("送信に失敗しました。もう一度お試しください。");
+      console.error("送信に失敗しました:(", error);
+      showSendError("送信に失敗しました:( もう一度お試しください。");
       setSending(false);
       return;
     }
