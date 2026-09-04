@@ -46,10 +46,7 @@ if (video) {
       if (data.fatal) setVideoStatus("error");
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-    /* HLSを使えそうか？
-    video.canPlayType("application/vnd.apple.mpegurl")
-    m3u8のMIMEタイプ：application/vnd.apple.mpegurl
-    戻り値:"", "maybe", "probably" */
+    // hls.jsが使えない環境（Safariなど）では、ブラウザネイティブのHLS再生にフォールバックする。
     video.src = STREAM_URL;
     video.addEventListener("loadedmetadata", () => {
       video.play().catch(() => {});
@@ -462,9 +459,9 @@ if (commentArea) {
 
   eventSource.onmessage = (event) => {
     // event.data は文字列。中身はJSON文字列で送られてくる想定なのでパースする。
-    //パース：jsonをjsのオブジェクトに変換すること
+    // 不正なJSONが送られてくる可能性もあるため、パース失敗時は黙って無視する。
     let payload;
-    try {//tryはエラーが起きそうな処理 catchにエラーが起きたときの処理
+    try {
       payload = JSON.parse(event.data);
     } catch {
       return;
@@ -477,7 +474,7 @@ if (commentArea) {
 
     // textとitemの両方があれば「コメント付きアイテム」として1つにまとめて表示する。
     if (payload.text && payload.item) {
-      const iconUrl = payload.item.iconUrl ?? ""; //Null合体演算子：左側の値が null または undefined のときだけ、右側の値を代わりに使います
+      const iconUrl = payload.item.iconUrl ?? "";
       const name = payload.item.name ?? "";
       if (!Number.isNaN(timestampMs)) {
         recordDanmakuMessage({ type: "itemComment", iconUrl, text: payload.text, timestampMs });
@@ -508,6 +505,7 @@ const ITEMS_URL =
   "https://intern-comment-server.intern-comment-server.deno.net/items";
 const ITEMS_PER_PAGE = 5; // アイコン画像の通信量削減のため、一度に表示する件数を絞る
 const itemToggle = document.querySelector(".item-toggle");
+const itemToggleLabel = document.querySelector(".item-toggle-label");
 const itemPriceFilter = document.querySelector(".item-price-filter");
 const itemListRow = document.querySelector(".item-list-row");
 const itemList = document.querySelector(".item-list");
@@ -515,19 +513,25 @@ const itemPagePrev = document.querySelector(".item-page-prev");
 const itemPageNext = document.querySelector(".item-page-next");
 const selectedItemChip = document.querySelector(".selected-item-chip");
 const selectedItemIcon = document.querySelector(".selected-item-icon");
-const selectedItemName = document.querySelector(".selected-item-name");
 const selectedItemRemove = document.querySelector(".selected-item-remove");
 
 // 選択中のアイテム（1件のみ）。未選択時はnull。
 let selectedItem = null;
 
 // 選択状態に合わせて、入力欄上のチップ表示を更新する。
+// アイテム名は表示せず、×ボタンのaria-labelにだけ含めてスクリーンリーダーに伝える。
 function renderSelectedItemChip() {
-  if (!selectedItemChip) return;
+  if (!selectedItemChip || !selectedItemIcon) return;
   selectedItemChip.hidden = !selectedItem;
   if (!selectedItem) return;
   selectedItemIcon.src = selectedItem.iconUrl ?? "";
-  selectedItemName.textContent = selectedItem.name ?? "";
+  selectedItemIcon.alt = selectedItem.name ?? "";
+  if (selectedItemRemove) {
+    selectedItemRemove.setAttribute(
+      "aria-label",
+      `アイテムの選択を解除（${selectedItem.name ?? ""}）`,
+    );
+  }
 }
 
 // アイテム一覧側の選択表示（aria-pressed）をすべて解除する。
@@ -558,11 +562,15 @@ if (
   itemPageNext
 ) {
   // 開閉ボタン：押すたびに一覧（絞り込みボタン＋アイテム）の表示・非表示を切り替える。
+  // 開いている間はラベルを「閉じる」に変え、押せば閉じられることが伝わるようにする。
   itemToggle.addEventListener("click", () => {
     const isExpanded = itemToggle.getAttribute("aria-expanded") === "true";
     itemToggle.setAttribute("aria-expanded", String(!isExpanded));
     itemPriceFilter.hidden = isExpanded; // 開いていたら隠す、隠れていたら表示する
     itemListRow.hidden = isExpanded;
+    if (itemToggleLabel) {
+      itemToggleLabel.textContent = isExpanded ? "アイテムを送る" : "閉じる";
+    }
   });
 
   // APIから取得した全アイテム。表示中の絞り込み・ページに応じて、この中から表示分だけをDOMに追加する。
@@ -570,25 +578,17 @@ if (
   let currentFilter = "all";
   let currentPage = 0;
 
-  // 値段データがAPIから届かないため、id文字列からダミーの値段を決定的に算出する。
-  // （同じidなら常に同じ値段になるようにする）
-  const DUMMY_PRICE_TIERS = [1000, 5000, 10000];
-  function dummyPrice(item) {
-    const id = item.id ?? item.name ?? "";
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = (hash * 31 + id.charCodeAt(i)) % DUMMY_PRICE_TIERS.length;
-    }
-    return DUMMY_PRICE_TIERS[hash];
-  }
-
-  // 絞り込み条件（すべて／1000円／5000円／10000円）に合うアイテムだけを返す。
+  // 絞り込み条件（すべて／プチギフト／ギフト／プレミアム）に合うアイテムだけを返す。
+  // costはAPIの実データをそのまま使う。プレミアムは上限を設けない開放区間にしており、
+  // 400円を超える金額（例: 500円）のアイテムが今後増えても、どれにも属さず
+  // 「すべて」でしか出てこなくなる抜け漏れが起きないようにしている。
   function filterItems(items, filter) {
-    if (filter === "low") return items.filter((item) => item.price === 1000);
-    if (filter === "mid") return items.filter((item) => item.price === 5000);
-    if (filter === "high")
-      return items.filter((item) => item.price === 10000);
-    return items;
+    if (filter === "low") return items.filter((item) => item.cost <= 150);
+    if (filter === "mid")
+      return items.filter((item) => item.cost > 150 && item.cost <= 400);
+    if (filter === "high") return items.filter((item) => item.cost > 400);
+    // 「すべて」は値段が高い順に並べ替える（APIの並び順はカテゴリ優先で値段順ではないため）。
+    return [...items].sort((a, b) => b.cost - a.cost);
   }
 
   // 1件分のアイテムを表示するボタン要素を作る（アイコン＋下に小さく名前・値段）。
@@ -625,9 +625,9 @@ if (
 
     const price = document.createElement("span");
     price.className = "item-button-price";
-    // 値段が算出できなかった場合は「価格不明」と表示する。
+    // costが取得できなかった場合は「価格不明」と表示する。
     price.textContent =
-      typeof item.price === "number" ? `${item.price}円` : "価格不明";
+      typeof item.cost === "number" ? `${item.cost}円` : "価格不明";
 
     button.append(img, name, price);
     return button;
@@ -694,11 +694,7 @@ if (
     fetch(ITEMS_URL)
       .then((response) => response.json())
       .then((data) => {
-        const items = data.items ?? [];
-        allItems = items.map((item) => ({
-          ...item,
-          price: dummyPrice(item),
-        }));
+        allItems = data.items ?? [];
         renderPage(currentPage);
       })
       .catch((error) => {
@@ -746,6 +742,18 @@ if (sendArea && commentInput && sendButton && sendError) {
     sendButton.classList.toggle("is-sending", isSending);
   }
 
+  const SEND_SUCCESS_DURATION = 1200; // チェックマーク表示後、この時間で通常表示に戻す
+  let sendSuccessTimeoutId = null;
+
+  // 送信成功時、ボタンのラベルを一瞬チェックマークに切り替える。
+  function showSendSuccess() {
+    clearTimeout(sendSuccessTimeoutId);
+    sendButton.classList.add("is-sent");
+    sendSuccessTimeoutId = setTimeout(() => {
+      sendButton.classList.remove("is-sent");
+    }, SEND_SUCCESS_DURATION);
+  }
+
   function showSendError(message) {
     sendError.textContent = message;
     sendError.hidden = false;
@@ -756,14 +764,12 @@ if (sendArea && commentInput && sendButton && sendError) {
   }
 
   sendArea.addEventListener("submit", async (event) => {
-    event.preventDefault(); // フォームの通常送信（ページ再読み込み）を防ぐ。
-    //これをしないとJavaScriptでの処理より先にページ遷移が起きる。
-    //htmlのformはデフォルトで「今表示しているページ自身」に送信されるので、押すたびリロードされてしまう
+    // formはデフォルトで自ページへ送信され、そのままだと押すたびリロードされてしまうため防ぐ。
+    event.preventDefault();
 
-    const text = commentInput.value.trim(); //前後の空白を除いたテキストを取得
+    const text = commentInput.value.trim();
 
-    // bodyを作り、要素として追加していく
-    //両方空なら送信しない
+    // テキスト・アイテムのどちらも無ければ送信しない
     const body = {};
     if (text) body.text = text;
     if (selectedItem) body.itemId = selectedItem.id;
@@ -775,7 +781,7 @@ if (sendArea && commentInput && sendButton && sendError) {
     try {
       await fetch(COMMENT_POST_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" }, //jsonで送ることを伝えている
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
     } catch (error) {
@@ -786,6 +792,7 @@ if (sendArea && commentInput && sendButton && sendError) {
     }
 
     setSending(false);
+    showSendSuccess();
 
     // 送信成功時のみ、入力欄・アイテム選択・アイテム一覧をリセットする。
     commentInput.value = "";
@@ -801,10 +808,10 @@ if (sendArea && commentInput && sendButton && sendError) {
  * 通常のコメント（テキストのみ、コメント1行分）を画面に追加する。
  */
 function addComment(text) {
-  const li = document.createElement("li"); //まだどこにも表示されていない状態で<li></li>を作る
-  li.className = "comment-item"; //属性を設定する。今で言えば、<li class="coment-item"></li>
+  const li = document.createElement("li");
+  li.className = "comment-item";
 
-  // コメント投稿者のアイコンは届かないため、見た目確認用のダミーアイコンを表示する。
+  // コメント投稿者のアイコンは届かないため、見た目確認用のダミーアイコン（styles.css参照）を表示する。
   const img = document.createElement("img");
   img.className = "comment-icon";
   img.alt = "";
@@ -813,7 +820,7 @@ function addComment(text) {
   p.className = "comment-text";
   p.textContent = text;
 
-  li.append(img, p);//liにimgとpを追加
+  li.append(img, p);
 
   appendCommentItem(li);
   spawnDanmakuComment(text);
@@ -823,8 +830,8 @@ function addComment(text) {
  * アイテム（コメント2行分の大きさで画像を表示し、その下にコメント1行分で名前を表示）を画面に追加する。
  */
 function addItem(iconUrl, name) {
-  const li = document.createElement("li"); //まだどこにも表示されていない状態で<li></li>を作る
-  li.className = "comment-item item-comment"; //属性を設定する。今で言えば、<li class="coment-item item-comment"></li>
+  const li = document.createElement("li");
+  li.className = "comment-item item-comment";
 
   const img = document.createElement("img");
   img.className = "item-icon";
@@ -836,7 +843,7 @@ function addItem(iconUrl, name) {
   p.className = "comment-text";
   p.textContent = caption;
 
-  li.append(img, p);//liにimgとpを追加
+  li.append(img, p);
 
   appendCommentItem(li);
   // 全画面時は「〇〇が送られました！」の文字は出さず、アイコンだけを流す
@@ -845,7 +852,6 @@ function addItem(iconUrl, name) {
 
 /**
  * コメント付きで届いたアイテムを画面に追加する。
- * アイコンの大きさはaddItemと同じまま、実際のコメント本文を主役にして表示する。
  */
 function addItemWithComment(iconUrl, name, text) {
   const li = document.createElement("li");

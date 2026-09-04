@@ -104,6 +104,26 @@
           stroke-linejoin="round"
         />
       </symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24">
+        <path
+          d="M5 13l4 4 10-10"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </symbol>
+      <symbol id="icon-tag" viewBox="0 0 24 24">
+        <path
+          d="M11 4H6a2 2 0 0 0-2 2v5l9.5 9.5a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8L11 4z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+        <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+      </symbol>
       <symbol id="icon-status-error" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
         <circle cx="9" cy="10" r="1" fill="currentColor" />
@@ -251,10 +271,19 @@
         <form class="send-area">
           <div class="item-panel">
             <button type="button" class="item-toggle" aria-expanded="false">
-              アイテム一覧
+              <svg class="item-toggle-icon" aria-hidden="true">
+                <use href="#icon-tag"></use>
+              </svg>
+              <span class="item-toggle-label">アイテムを送る</span>
+              <svg class="item-toggle-chevron" aria-hidden="true">
+                <use href="#icon-arrow-down"></use>
+              </svg>
             </button>
             <div class="item-price-filter" hidden>
-              <!-- 値段は実データがないため、main.js でダミーの値段を割り振って絞り込む -->
+              <!-- 値段の絞り込みはAPIのcostフィールド（実データ）を3つの帯域に分けて
+                   条件にする。プレミアムは上限を設けない開放区間にして、400円超の
+                   金額（例:500円）のアイテムが今後追加されても必ずどれかの帯域に
+                   入るようにする -->
               <button
                 type="button"
                 class="item-price-button"
@@ -269,7 +298,7 @@
                 data-price-filter="low"
                 aria-pressed="false"
               >
-                1000円
+                プチギフト
               </button>
               <button
                 type="button"
@@ -277,7 +306,7 @@
                 data-price-filter="mid"
                 aria-pressed="false"
               >
-                5000円
+                ギフト
               </button>
               <button
                 type="button"
@@ -285,7 +314,7 @@
                 data-price-filter="high"
                 aria-pressed="false"
               >
-                10000円
+                プレミアム
               </button>
             </div>
             <div class="item-list-row" hidden>
@@ -308,19 +337,18 @@
               </button>
             </div>
           </div>
-          <!-- 選択中のアイテム（1つまで）。main.js がアイテム選択時に表示し、×または送信完了で消す -->
-          <div class="selected-item-chip" hidden>
-            <img class="selected-item-icon" alt="" />
-            <span class="selected-item-name"></span>
-            <button
-              type="button"
-              class="selected-item-remove"
-              aria-label="アイテムの選択を解除"
-            >
-              ×
-            </button>
-          </div>
           <div class="comment-input-row">
+            <!-- 選択中のアイテム（1つまで）。main.js がアイテム選択時に表示し、×または送信完了で消す -->
+            <div class="selected-item-chip" hidden>
+              <img class="selected-item-icon" alt="" />
+              <button
+                type="button"
+                class="selected-item-remove"
+                aria-label="アイテムの選択を解除"
+              >
+                ×
+              </button>
+            </div>
             <textarea
               class="comment-input"
               placeholder="コメントを入力"
@@ -336,6 +364,9 @@
             <button type="submit" class="send-button">
               <span class="send-button-label">送信</span>
               <span class="send-button-spinner" aria-hidden="true"></span>
+              <span class="send-button-check" aria-hidden="true">
+                <svg><use href="#icon-check"></use></svg>
+              </span>
             </button>
           </div>
           <!-- 送信失敗時のみ main.js が表示するエラーメッセージ -->
